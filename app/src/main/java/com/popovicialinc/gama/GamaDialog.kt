@@ -1,5 +1,6 @@
 package com.popovicialinc.gama
 
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
@@ -115,4 +116,117 @@ import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.roundToInt
 
+
+
+@Composable
+fun BouncyDialog(visible: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    // Call the full implementation with default parameters
+    BouncyDialog(
+        visible = visible,
+        onDismiss = onDismiss,
+        fullScreen = false,
+        applyBlur = false,
+        content = content
+    )
+}
+
+@Composable
+fun BouncyDialog(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    fullScreen: Boolean = false,
+    applyBlur: Boolean = false,
+    exitStartDelayMillis: Int = 0,
+    content: @Composable () -> Unit
+) {
+    val animLevel = LocalAnimationLevel.current
+    val animSpeed = LocalAnimationSpeed.current
+    val dismissOnClickOutside = LocalDismissOnClickOutside.current
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+
+    var renderContent by remember { mutableStateOf(visible) }
+    var isExiting     by remember { mutableStateOf(false) }
+    val animScale     = remember { Animatable(if (visible) 1f else 0.88f) }
+    val animAlpha     = remember { Animatable(if (visible) 1f else 0f) }
+    val scope         = rememberCoroutineScope()
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            isExiting = false
+            renderContent = true
+            if (animLevel == 2) {
+                animScale.snapTo(1f)
+                animAlpha.snapTo(1f)
+                return@LaunchedEffect
+            }
+            animScale.snapTo(0.88f)
+            animAlpha.snapTo(0f)
+            val enterSpec: FiniteAnimationSpec<Float> = when (animLevel) {
+                0 -> spring(dampingRatio = 0.42f, stiffness = MotionTokens.SpeedUtil.stiffness(190f, animSpeed))
+                else -> tween(durationMillis = MotionTokens.SpeedUtil.durationMs(210, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
+            }
+            val alphaEnterDuration = when (animLevel) { 0 -> 280; else -> 190 }
+            scope.launch {
+                animScale.animateTo(targetValue = 1f, animationSpec = enterSpec)
+            }
+            animAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = alphaEnterDuration, easing = MotionTokens.Easing.enter)
+            )
+        } else {
+            isExiting = true
+            if (animLevel == 2) {
+                renderContent = false
+                isExiting = false
+                animScale.snapTo(0.88f)
+                animAlpha.snapTo(0f)
+                return@LaunchedEffect
+            }
+            if (exitStartDelayMillis > 0) {
+                delay(exitStartDelayMillis.toLong())
+            }
+            val exitDuration = when (animLevel) { 0 -> 170; else -> 115 }
+            scope.launch {
+                animScale.animateTo(
+                    targetValue = if (animLevel == 0) 0.78f else 0.96f,
+                    animationSpec = tween(durationMillis = exitDuration, easing = MotionTokens.Easing.exit)
+                )
+            }
+            animAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = (exitDuration - 20).coerceAtLeast(70), easing = MotionTokens.Easing.exit)
+            )
+            renderContent = false
+            isExiting = false
+            animScale.snapTo(0.88f)
+            animAlpha.snapTo(0f)
+        }
+    }
+
+    if (!renderContent) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (visible && !isExiting) Modifier.pointerInput(dismissOnClickOutside) {
+                    if (dismissOnClickOutside) detectTapGestures { currentOnDismiss() }
+                    else detectTapGestures { }
+                } else Modifier
+            )
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = animScale.value
+                scaleY = animScale.value
+                alpha  = animAlpha.value
+            },
+        contentAlignment = if (fullScreen) Alignment.TopStart else Alignment.Center
+    ) {
+        content()
+    }
+}
 

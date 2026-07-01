@@ -1,0 +1,372 @@
+package com.popovicialinc.gama
+
+
+import android.content.Context
+import android.os.Build
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+
+
+@Composable
+internal fun tr(key: String, fallback: String): String =
+    LocalStrings.current[key].ifEmpty { fallback }
+
+@Composable
+internal fun PanelScaffold(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    isLandscape: Boolean,
+    isSmallScreen: Boolean,
+    isBlurred: Boolean = false,
+    oledMode: Boolean = false,
+    rootExitCascade: Boolean = false,
+    colors: ThemeColors,
+    leadingFloatingButton: (@Composable (Modifier) -> Unit)? = null,
+    edgeSpacers: Boolean = true,
+    reserveBackButtonSpace: Boolean = true,
+    contentAvoidsBackButton: Boolean = true,
+    contentScrollable: Boolean = true,
+    content: @Composable ColumnScope.(scrollState: ScrollState) -> Unit
+) {
+    val dismissOnClickOutside = LocalDismissOnClickOutside.current
+    val scrollState = rememberScrollState()
+    LaunchedEffect(visible) { if (visible) scrollState.scrollTo(0) }
+    val animLevel = LocalAnimationLevel.current
+    val animSpeed = LocalAnimationSpeed.current
+    val backButtonInversed = LocalBackButtonInversed.current
+
+    // Floating panel chrome should use the same visual language as the cards:
+    // fade + slight zoom + tiny vertical lift.
+    // Do NOT launch it from far below with an overshooting spring, because that
+    // makes the magnifier / globe / < button feel like a different animation system.
+    val floatingChromeOffsetYPx = with(LocalDensity.current) {
+        when (animLevel) {
+            0 -> 20.dp.toPx()
+            1 -> 8.dp.toPx()
+            else -> 0.dp.toPx()
+        }
+    }
+
+    // Static bottom padding — reserves space for the floating back button so the
+    // last card is never obscured.  Previously this was an animated spring, but
+    // animating a .padding() value triggers a full layout pass every frame during
+    // the ~300 ms panel-enter transition, causing the visible stutter/freeze.
+    // The back button already animates in via graphicsLayer translationY (draw-only,
+    // zero layout cost), so the padding just needs to be the correct resting size
+    // from the first frame — no animation required.
+    val bottomPaddingDp = if (isSmallScreen) 120f else 132f  // dp: button height + gap + clearance
+    // When a sub-dialog opens (isBlurred = true) the panel dims so the dialog feels
+    // on a higher layer. The blur itself snaps on/off (no animated radius — see below).
+    //
+    // panelAlpha  — 1→0.35 dims the whole panel as the sub-dialog arrives
+    val panelAlpha by animateFloatAsState(
+        targetValue = if (isBlurred) 0.38f else 1f,
+        animationSpec = if (animLevel == 2) snap() else tween(
+            durationMillis = MotionTokens.SpeedUtil.durationMs(if (isBlurred) 300 else 190, animSpeed),
+            easing = if (isBlurred) MotionTokens.Easing.emphasizedDecelerate else MotionTokens.Easing.enter
+        ),
+        label = "panel_dim_alpha"
+    )
+
+    BouncyDialog(
+        visible = visible,
+        onDismiss = onDismiss,
+        fullScreen = true,
+        exitStartDelayMillis = if (rootExitCascade) {
+            when (animLevel) {
+                0 -> 105
+                1 -> 70
+                else -> 0
+            }
+        } else 0
+    ) {
+        CompositionLocalProvider(LocalRootPanelExitCascade provides rootExitCascade) {
+        // Single render of panel content — no double composition.
+        //
+        // Previously: panelContent() was called twice (sharp copy + blurred copy),
+        // composing the entire panel tree twice during the ~320ms transition.
+        //
+        // Now: one render, always.  When a sub-dialog opens:
+        //   • API 31+: Modifier.blur() is applied in the draw phase only (zero
+        //     recomposition overhead) and the panel dims to 35% alpha.
+        //   • API < 31: blur is unavailable, the panel just dims to 35% — still
+        //     communicates depth without any GPU blur cost.
+        //
+        // The visual difference on API 31+ is imperceptible: the user is looking
+        // at a dialog, not scrutinising the blurred panel behind it.
+        val useBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+        // Snap blur radius — never animate it per-frame.
+        // Previously `(blurAlpha * 20f).dp` caused a new RenderEffect (Gaussian kernel
+        // rebuild) every vsync during the ~300 ms transition: ~18 kernel rebuilds back-to-back.
+        // Fixed radius set once when isBlurred becomes true → zero per-frame GPU rebuild cost.
+        // The panelAlpha fade still provides smooth visual feedback of the transition.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = panelAlpha }
+                .then(
+                    if (useBlur && isBlurred)
+                        Modifier.blur(
+                            radius = 20.dp,
+                            edgeTreatment = BlurredEdgeTreatment.Unbounded
+                        )
+                    else Modifier
+                )
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Background tap layer. It sits behind the cards/back button, so it
+                // keeps outside-tap dismissal without stealing child clicks.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (visible) Modifier.pointerInput(dismissOnClickOutside) {
+                                if (dismissOnClickOutside) detectTapGestures { onDismiss() }
+                                else detectTapGestures { }
+                            } else Modifier
+                        )
+                )
+
+                val backButtonSize = if (isSmallScreen) 48.dp else 52.dp
+                val horizontalPadding = if (isLandscape) 32.dp else 24.dp
+
+                CompositionLocalProvider(
+                    LocalFloatingBackButtonAvoidance provides FloatingBackButtonAvoidance(
+                        enabled = visible && !isLandscape && contentAvoidsBackButton && LocalBackButtonAvoidanceEnabled.current,
+                        endPadding = backButtonSize + 32.dp,
+                        bottomPadding = if (isSmallScreen) 44.dp else 52.dp,
+                        buttonSize = backButtonSize
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = if (isLandscape) 800.dp else 500.dp)
+                            .then(
+                                if (contentScrollable) Modifier.verticalScroll(scrollState)
+                                else Modifier.fillMaxHeight()
+                            )
+                            .padding(horizontal = horizontalPadding)
+                            .padding(
+                                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                                bottom = if (reserveBackButtonSpace) bottomPaddingDp.dp else 0.dp
+                            )
+                            .then(
+                                if (visible) Modifier.pointerInput(Unit) { detectTapGestures { } }
+                                else Modifier
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 16.dp else 20.dp)
+                    ) {
+                        if (edgeSpacers) Spacer(modifier = Modifier.height(if (isLandscape) 24.dp else 40.dp))
+                        content(scrollState)
+                        if (edgeSpacers) Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                val floatingBottomPadding = if (isSmallScreen) 18.dp else 24.dp
+                // Match the main ":" button anchor exactly.
+                // The floating buttons draw a 1.8x glow wrapper, so anchoring by the
+                // raw button size made "<" sit closer to the edge than ":".
+                val floatingGlowSize = backButtonSize * 1.8f
+                val floatingRestX = maxWidth / 2f - 16.dp - floatingGlowSize / 2f
+                val floatingOffscreenX = maxWidth / 2f + floatingGlowSize
+                var floatingChromeVisible by remember { mutableStateOf(visible) }
+                LaunchedEffect(visible, animLevel) {
+                    if (visible) {
+                        floatingChromeVisible = true
+                    } else {
+                        // Root panels keep a short foreground-first beat. Deeper panels
+                        // should leave immediately so sub-menu navigation stays fast.
+                        if (animLevel != 2 && rootExitCascade) delay(85L)
+                        floatingChromeVisible = false
+                    }
+                }
+
+                val floatingChromeProgress by animateFloatAsState(
+                    targetValue = if (floatingChromeVisible) 1f else 0f,
+                    animationSpec = when (animLevel) {
+                        2 -> snap()
+                1 -> tween(durationMillis = MotionTokens.SpeedUtil.durationMs(120, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
+                else -> spring(dampingRatio = 0.70f, stiffness = MotionTokens.SpeedUtil.stiffness(520f, animSpeed))
+                    },
+                    label = "panel_floating_chrome_progress"
+                )
+                val floatingChromeScale = 0.94f + floatingChromeProgress * 0.06f
+                val floatingChromeTranslationY = (1f - floatingChromeProgress) * floatingChromeOffsetYPx
+
+                fun sideOffset(sideProgress: Float): Dp {
+                    val direction = if (sideProgress < 0f) -1f else 1f
+                    return if (kotlin.math.abs(sideProgress) <= 1f) {
+                        floatingRestX * sideProgress
+                    } else {
+                        floatingOffscreenX * direction
+                    }
+                }
+
+                val backSideProgress = remember { Animatable(if (backButtonInversed) -1f else 1f) }
+                val leadingSideProgress = remember { Animatable(if (backButtonInversed) 1f else -1f) }
+
+                LaunchedEffect(backButtonInversed, maxWidth) {
+                    val target = if (backButtonInversed) -1f else 1f
+                    val currentDirection = if (backSideProgress.value < 0f) -1f else 1f
+                    if (currentDirection != target) {
+                        val leaveSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(150, animSpeed), easing = MotionTokens.Easing.exit)
+                        val enterSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
+                        backSideProgress.animateTo(currentDirection * 1.35f, leaveSpec)
+                        backSideProgress.snapTo(-currentDirection * 1.35f)
+                        backSideProgress.animateTo(target, enterSpec)
+                    } else {
+                        backSideProgress.animateTo(target, tween(durationMillis = MotionTokens.SpeedUtil.durationMs(220, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate))
+                    }
+                }
+
+                LaunchedEffect(backButtonInversed, maxWidth) {
+                    val target = if (backButtonInversed) 1f else -1f
+                    val currentDirection = if (leadingSideProgress.value < 0f) -1f else 1f
+                    if (currentDirection != target) {
+                        val leaveSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(150, animSpeed), easing = MotionTokens.Easing.exit)
+                        val enterSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
+                        leadingSideProgress.animateTo(currentDirection * 1.35f, leaveSpec)
+                        leadingSideProgress.snapTo(-currentDirection * 1.35f)
+                        leadingSideProgress.animateTo(target, enterSpec)
+                    } else {
+                        leadingSideProgress.animateTo(target, tween(durationMillis = MotionTokens.SpeedUtil.durationMs(220, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate))
+                    }
+                }
+
+                leadingFloatingButton?.invoke(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = floatingBottomPadding)
+                        .offset(x = sideOffset(leadingSideProgress.value))
+                        .graphicsLayer(
+                            alpha = floatingChromeProgress,
+                            scaleX = floatingChromeScale,
+                            scaleY = floatingChromeScale,
+                            translationY = floatingChromeTranslationY
+                        )
+                )
+
+                PanelBackButton(
+                    onClick = onDismiss,
+                    colors = colors,
+                    oledMode = oledMode,
+                    isSmallScreen = isSmallScreen,
+                    enabled = visible,
+                    scrollState = scrollState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = floatingBottomPadding)
+                        .offset(x = sideOffset(backSideProgress.value))
+                        .graphicsLayer(
+                            alpha = floatingChromeProgress,
+                            scaleX = floatingChromeScale,
+                            scaleY = floatingChromeScale,
+                            translationY = floatingChromeTranslationY
+                        )
+                )
+            }
+        }
+        }
+    }
+}
+
+@Composable
+internal fun PanelCaption(
+    text: String,
+    colors: ThemeColors,
+    modifier: Modifier = Modifier,
+    accent: Boolean = false
+) {
+    val ts = LocalTypeScale.current
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 0.dp, bottom = 8.dp)
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        colors.background.copy(alpha = 0.18f),
+                        colors.background.copy(alpha = 0.26f),
+                        colors.background.copy(alpha = 0.18f),
+                        Color.Transparent
+                    )
+                )
+            )
+            .padding(horizontal = 30.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = ts.bodySmall,
+            color = if (accent) colors.primaryAccent.copy(alpha = 0.70f)
+                    else colors.textPrimary.copy(alpha = 0.62f),
+            fontFamily = quicksandFontFamily,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.fillMaxWidth(),
+            lineHeight = 19.sp
+        )
+    }
+}
+

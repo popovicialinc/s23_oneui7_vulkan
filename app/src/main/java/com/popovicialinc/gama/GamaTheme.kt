@@ -134,34 +134,34 @@ val quicksandFontFamily = FontFamily(
 
 data class AdaptiveTypeScale(
     // Panel / dialog titles  (e.g. "SETTINGS", "RESOURCES")
-    val displayLarge:  TextUnit,   // ~40–48 sp at normal density
+    val displayLarge: TextUnit,   // ~40–48 sp at normal density
     val displayMedium: TextUnit,   // ~32–40 sp
-    val displaySmall:  TextUnit,   // ~26–34 sp
+    val displaySmall: TextUnit,   // ~26–34 sp
 
     // Section headings inside panels
-    val headlineLarge:  TextUnit,  // ~22–28 sp
+    val headlineLarge: TextUnit,  // ~22–28 sp
     val headlineMedium: TextUnit,  // ~20–24 sp
-    val headlineSmall:  TextUnit,  // ~17–21 sp
+    val headlineSmall: TextUnit,  // ~17–21 sp
 
     // Body / list content
-    val bodyLarge:   TextUnit,     // ~15–18 sp
-    val bodyMedium:  TextUnit,     // ~13–16 sp
-    val bodySmall:   TextUnit,     // ~12–14 sp
+    val bodyLarge: TextUnit,     // ~15–18 sp
+    val bodyMedium: TextUnit,     // ~13–16 sp
+    val bodySmall: TextUnit,     // ~12–14 sp
 
     // Buttons
-    val buttonLarge:  TextUnit,    // ~18–22 sp
+    val buttonLarge: TextUnit,    // ~18–22 sp
     val buttonMedium: TextUnit,    // ~16–18 sp
 
     // Labels / captions / badges
-    val labelLarge:  TextUnit,     // ~13–15 sp
+    val labelLarge: TextUnit,     // ~13–15 sp
     val labelMedium: TextUnit,     // ~12–13 sp
-    val labelSmall:  TextUnit,     // ~11–12 sp
+    val labelSmall: TextUnit,     // ~11–12 sp
 )
 
 @Composable
 fun rememberAdaptiveType(): AdaptiveTypeScale {
     val configuration = LocalConfiguration.current
-    val density       = LocalDensity.current
+    val density = LocalDensity.current
 
     return remember(
         configuration.screenWidthDp,
@@ -170,21 +170,21 @@ fun rememberAdaptiveType(): AdaptiveTypeScale {
         configuration.densityDpi,
         configuration.orientation
     ) {
-        val widthDp  = configuration.screenWidthDp.toFloat()
+        val widthDp = configuration.screenWidthDp.toFloat()
         val heightDp = configuration.screenHeightDp.toFloat()
         val fontScale = configuration.fontScale          // user accessibility pref
-        val dpi       = configuration.densityDpi         // physical DPI
+        val dpi = configuration.densityDpi         // physical DPI
         val isLandscape = widthDp > heightDp
-        val isTablet    = widthDp >= 600f && heightDp >= 600f
+        val isTablet = widthDp >= 600f && heightDp >= 600f
 
         // ── Layout scale: how much space we actually have ────────────────────
         // Normalised against a "reference" 400 dp wide portrait phone.
         // Tablets get a gentle boost; landscape phones get a mild reduction
         // because vertical space is tight and we don't want giant labels.
         val layoutScale = when {
-            isTablet   -> (widthDp / 720f).coerceIn(0.92f, 1.25f)
+            isTablet -> (widthDp / 720f).coerceIn(0.92f, 1.25f)
             isLandscape -> (widthDp / 640f).coerceIn(0.80f, 1.05f)
-            else        -> (widthDp / 400f).coerceIn(0.85f, 1.18f)
+            else -> (widthDp / 400f).coerceIn(0.85f, 1.18f)
         }
 
         // ── DPI nudge: very high-DPI screens pack more pixels per dp so text
@@ -194,7 +194,7 @@ fun rememberAdaptiveType(): AdaptiveTypeScale {
             dpi >= 420 -> 0.98f   // xxhdpi
             dpi >= 280 -> 1.00f   // xhdpi / hdpi — reference
             dpi >= 200 -> 1.02f   // mdpi
-            else       -> 1.05f   // ldpi — needs help
+            else -> 1.05f   // ldpi — needs help
         }
 
         // ── Font scale: the user may have set a large/small system font.
@@ -215,24 +215,24 @@ fun rememberAdaptiveType(): AdaptiveTypeScale {
         fun Float.s() = (this * m).coerceIn(8f, 72f).sp
 
         AdaptiveTypeScale(
-            displayLarge   = 50f.s(),
-            displayMedium  = 44f.s(),
-            displaySmall   = 37f.s(),
+            displayLarge = 50f.s(),
+            displayMedium = 44f.s(),
+            displaySmall = 37f.s(),
 
-            headlineLarge  = 28f.s(),
+            headlineLarge = 28f.s(),
             headlineMedium = 24f.s(),
-            headlineSmall  = 21f.s(),
+            headlineSmall = 21f.s(),
 
-            bodyLarge      = 18f.s(),
-            bodyMedium     = 16f.s(),
-            bodySmall      = 14f.s(),
+            bodyLarge = 18f.s(),
+            bodyMedium = 16f.s(),
+            bodySmall = 14f.s(),
 
-            buttonLarge    = 21f.s(),
-            buttonMedium   = 17f.s(),
+            buttonLarge = 21f.s(),
+            buttonMedium = 17f.s(),
 
-            labelLarge     = 15f.s(),
-            labelMedium    = 13f.s(),
-            labelSmall     = 12f.s(),
+            labelLarge = 15f.s(),
+            labelMedium = 13f.s(),
+            labelSmall = 12f.s(),
         )
     }
 }
@@ -267,10 +267,13 @@ object MotionTokens {
         val silk = CubicBezierEasing(0.45f, 0.05f, 0.55f, 0.95f)
         val butter = CubicBezierEasing(0.35f, 0.0f, 0.1f, 1.0f)  // refined: more pronounced ease-out
         val velvet = CubicBezierEasing(0.37f, 0.0f, 0.63f, 1.0f)
+
         // Enter curve: fast lift-off, gentle deceleration into final position
         val enter = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
+
         // Exit curve: immediate acceleration, swift departure
         val exit = CubicBezierEasing(0.55f, 0.0f, 1.0f, 0.45f)
+
         // Overshoot: like enter but with a subtle anticipation kick
         val overshoot = CubicBezierEasing(0.34f, 1.2f, 0.64f, 1.0f)
     }
@@ -278,18 +281,20 @@ object MotionTokens {
     object Springs {
         data class SpringConfig(val dampingRatio: Float, val stiffness: Float)
 
-        val silk       = SpringConfig(0.82f,  280f)   // slightly more damped — settles with no ringing
-        val smooth     = SpringConfig(0.76f, 380f)
-        val gentle     = SpringConfig(0.72f,  480f)
-        val balanced   = SpringConfig(0.62f,  580f)
+        val silk = SpringConfig(0.82f, 280f)   // slightly more damped — settles with no ringing
+        val smooth = SpringConfig(0.76f, 380f)
+        val gentle = SpringConfig(0.72f, 480f)
+        val balanced = SpringConfig(0.62f, 580f)
         val responsive = SpringConfig(0.56f, 680f)
-        val playful    = SpringConfig(0.44f,  230f)   // softer stiffness — longer, dreamier bounce
-        val snappy     = SpringConfig(0.88f, 950f)    // fractionally less stiff — avoids a hard-mechanical feel
+        val playful = SpringConfig(0.44f, 230f)   // softer stiffness — longer, dreamier bounce
+        val snappy = SpringConfig(0.88f, 950f)    // fractionally less stiff — avoids a hard-mechanical feel
+
         // Press-down: immediate, no bounce. Release: overshoots past rest, settles with one clean bounce.
-        val pressDown  = SpringConfig(0.92f, 1500f)   // marginally higher damping — zero micro-oscillation on press
-        val pressUp    = SpringConfig(0.46f,  440f)   // slightly less stiff — bounce travels a hair further before settling
+        val pressDown = SpringConfig(0.92f, 1500f)   // marginally higher damping — zero micro-oscillation on press
+        val pressUp = SpringConfig(0.46f, 440f)   // slightly less stiff — bounce travels a hair further before settling
+
         // Snap-back: used after swipe-to-dismiss cancel; confident return to rest
-        val snapBack   = SpringConfig(0.72f,  600f)
+        val snapBack = SpringConfig(0.72f, 600f)
     }
 
     object Scale {
@@ -297,6 +302,26 @@ object MotionTokens {
         const val mild = 0.95f
         const val moderate = 0.90f
         const val dramatic = 0.85f
+    }
+
+    object SpeedUtil {
+        fun durationMs(baseMs: Int, speed: Int): Int {
+            return when (speed) {
+                0 -> (baseMs * 3 / 2).coerceAtMost(9000)
+                1 -> baseMs
+                2 -> (baseMs * 7 / 10).coerceAtLeast(50)
+                else -> baseMs
+            }
+        }
+
+        fun stiffness(baseStiffness: Float, speed: Int): Float {
+            return when (speed) {
+                0 -> baseStiffness * 0.8f
+                1 -> baseStiffness
+                2 -> baseStiffness * 1.2f
+                else -> baseStiffness
+            }
+        }
     }
 }
 
@@ -370,24 +395,31 @@ data class ThemeColors(
 }
 
 
+val LocalAnimationsEnabled = compositionLocalOf { true }
 val LocalAnimationLevel = compositionLocalOf { 0 }
+val LocalAnimationSpeed = compositionLocalOf { 1 } // 0=slow, 1=normal, 2=fast
 val LocalThemeColors = compositionLocalOf { ThemeColors.dark() }
 val LocalUIScale = compositionLocalOf { 1 } // 0=75%, 1=100%, 2=125%
 val LocalDismissOnClickOutside = compositionLocalOf { true } // New global setting for back behavior
 val LocalStaggerEnabled = compositionLocalOf { true } // true = cascading stagger, false = simultaneous fade+scale
 val LocalBackButtonAvoidanceEnabled = compositionLocalOf { true } // true = cards duck away from floating back button
 val LocalBackButtonInversed = compositionLocalOf { false } // false = back button on right, true = back button on left
-val LocalShadowsEnabled = compositionLocalOf { true } // true = card elevation shadows, false = flat (no shadow blur pass)
-val LocalCardSettled   = compositionLocalOf { true }  // false while AnimatedElement is mid-stagger, true once it lands
-val LocalCardProgress  = compositionLocalOf { 1f }    // mirrors AnimatedElement's progress [0,1]; drives directional shadow intensity
-val LocalCardEnabled   = compositionLocalOf { true }  // false when the card is disabled; drives shadow fade-out with ease-in-out animation
-val LocalTypeScale = compositionLocalOf { AdaptiveTypeScale(
-    displayLarge = 50.sp, displayMedium = 44.sp, displaySmall = 37.sp,
-    headlineLarge = 28.sp, headlineMedium = 24.sp, headlineSmall = 21.sp,
-    bodyLarge = 18.sp, bodyMedium = 16.sp, bodySmall = 14.sp,
-    buttonLarge = 21.sp, buttonMedium = 17.sp,
-    labelLarge = 15.sp, labelMedium = 13.sp, labelSmall = 12.sp,
-) }
+val LocalShadowsEnabled =
+    compositionLocalOf { true } // true = card elevation shadows, false = flat (no shadow blur pass)
+val LocalCardSettled = compositionLocalOf { true }  // false while AnimatedElement is mid-stagger, true once it lands
+val LocalCardProgress =
+    compositionLocalOf { 1f }    // mirrors AnimatedElement's progress [0,1]; drives directional shadow intensity
+val LocalCardEnabled =
+    compositionLocalOf { true }  // false when the card is disabled; drives shadow fade-out with ease-in-out animation
+val LocalTypeScale = compositionLocalOf {
+    AdaptiveTypeScale(
+        displayLarge = 50.sp, displayMedium = 44.sp, displaySmall = 37.sp,
+        headlineLarge = 28.sp, headlineMedium = 24.sp, headlineSmall = 21.sp,
+        bodyLarge = 18.sp, bodyMedium = 16.sp, bodySmall = 14.sp,
+        buttonLarge = 21.sp, buttonMedium = 17.sp,
+        labelLarge = 15.sp, labelMedium = 13.sp, labelSmall = 12.sp,
+    )
+}
 
 
 // Theme color scheme

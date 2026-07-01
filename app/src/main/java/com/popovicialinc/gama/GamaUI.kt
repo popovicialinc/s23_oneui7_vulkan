@@ -106,25 +106,11 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 
 
-private fun String.withoutGreetingEmoji(): String = this
-    .replace("☀️", "")
-    .replace("🌙", "")
-    .replace("👋", "")
-    .replace("✅", "")
-    .replace("⚠️", "")
-    .replace("❌", "")
-    .replace(Regex("\\s+"), " ")
-    .trim()
-
-
-// ============================================================
-// GamaUI: main composable — state, navigation, layout
-// ============================================================
-
-private fun sanitizeAccentColorForTheme(color: Color, isDarkTheme: Boolean): Color {
+private fun sanitizeAccentColorForTheme(color: Color, isOledMode: Boolean): Color {
+    val luma = color.luminance()
     return when {
-        isDarkTheme && color.toArgb() == Color.Black.toArgb() -> Color.White
-        !isDarkTheme && color.toArgb() == Color.White.toArgb() -> Color.Black
+        isOledMode && luma < 0.18f -> lerp(color, Color.White, 0.35f)
+        !isOledMode && luma > 0.82f -> lerp(color, Color.Black, 0.30f)
         else -> color
     }
 }
@@ -154,6 +140,7 @@ fun GamaUI(
             when (event) {
                 Lifecycle.Event.ON_START,
                 Lifecycle.Event.ON_RESUME -> appInForeground = true
+
                 Lifecycle.Event.ON_STOP -> appInForeground = false
                 else -> Unit
             }
@@ -207,17 +194,18 @@ fun GamaUI(
 
     if (savedPrefsVersion < PREFS_VERSION) {
         SideEffect {
-            val savedUserName       = prefs.getString("user_name", "") ?: ""
-            val savedExcludedApps   = prefs.getStringSet("excluded_apps", emptySet()) ?: emptySet()
-            val savedLabelsShown    = prefs.getBoolean("button_labels_shown", false)
-            val savedNotifPermReq   = prefs.getBoolean("notif_perm_requested", false)
+            val savedUserName = prefs.getString("user_name", "") ?: ""
+            val savedExcludedApps = prefs.getStringSet("excluded_apps", emptySet()) ?: emptySet()
+            val savedLabelsShown = prefs.getBoolean("button_labels_shown", false)
+            val savedNotifPermReq = prefs.getBoolean("notif_perm_requested", false)
 
             prefs.edit().clear()
-                .putInt("prefs_version",           PREFS_VERSION)
-                .putString("user_name",            savedUserName)
-                .putStringSet("excluded_apps",     savedExcludedApps)
+                .putInt("prefs_version", PREFS_VERSION)
+                .putString("user_name", savedUserName)
+                .putStringSet("excluded_apps", savedExcludedApps)
                 .putBoolean("button_labels_shown", savedLabelsShown)
                 .putBoolean("notif_perm_requested", savedNotifPermReq)
+                .putInt("animation_speed", 1) // Default to normal speed
                 .apply()
         }
     }
@@ -273,17 +261,17 @@ fun GamaUI(
     var showGradient by remember { mutableStateOf(false) }
     var showSystem by remember { mutableStateOf(false) }
     var showRendererPanel by remember { mutableStateOf(false) }
-    var showIntegrationInfoDialog   by remember { mutableStateOf(false) }
-    var integrationInfoTitle        by remember { mutableStateOf("") }
-    var integrationInfoBody         by remember { mutableStateOf("") }
+    var showIntegrationInfoDialog by remember { mutableStateOf(false) }
+    var integrationInfoTitle by remember { mutableStateOf("") }
+    var integrationInfoBody by remember { mutableStateOf("") }
     var showDeveloper by remember { mutableStateOf(false) }
     var showParticles by remember { mutableStateOf(false) }
     var showParticlesAppearance by remember { mutableStateOf(false) }
     var showParticlesMotion by remember { mutableStateOf(false) }
     var showParticlesPerformance by remember { mutableStateOf(false) }
-    var showMatrixSettings   by remember { mutableStateOf(false) }
+    var showMatrixSettings by remember { mutableStateOf(false) }
     var showMatrixAppearance by remember { mutableStateOf(false) }
-    var showMatrixMotion     by remember { mutableStateOf(false) }
+    var showMatrixMotion by remember { mutableStateOf(false) }
     var showParticlesSettings by remember { mutableStateOf(false) }
     var showBackup by remember { mutableStateOf(false) }
     var showCrashLog by remember { mutableStateOf(false) }
@@ -496,23 +484,87 @@ fun GamaUI(
     val systemInDarkTheme = isSystemInDarkTheme()
     // Default animation level to 0 (Normal) — full quality animations
     var animationLevel by remember { mutableStateOf(prefs.getInt("animation_level", 0)) }
+    var animationSpeed by remember { mutableStateOf(prefs.getInt("animation_speed", 1)) }
     var gradientEnabled by remember { mutableStateOf(prefs.getBoolean("gradient_enabled", true)) }
     var blurEnabled by remember { mutableStateOf(prefs.getBoolean("blur_enabled", true)) }
     var particlesEnabled by remember { mutableStateOf(prefs.getBoolean("particles_enabled", true)) }
-    var particleSpeed by remember { mutableStateOf(prefs.getInt("particle_speed", 1)) } // 0=low, 1=medium, 2=high (default: medium)
+    var particleSpeed by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "particle_speed",
+                1
+            )
+        )
+    } // 0=low, 1=medium, 2=high (default: medium)
     var particleParallaxEnabled by remember { mutableStateOf(prefs.getBoolean("particle_parallax_enabled", true)) }
-    var particleParallaxSensitivity by remember { mutableStateOf(prefs.getInt("particle_parallax_sensitivity", 0)) } // 0=low(0.15), 1=medium(0.3), 2=high(0.5)
-    var particleStarMode by remember { mutableStateOf(prefs.getBoolean("particle_star_mode", false)) } // New: star mode toggle
-    var particleTimeMode by remember { mutableStateOf(prefs.getBoolean("particle_time_mode", true)) } // Time-based sun & moon system
-    var timeOffsetHours by remember { mutableStateOf(prefs.getFloat("time_offset_hours", 0f)) } // Developer: time offset
-    var particleCount by remember { mutableStateOf(prefs.getInt("particle_count", 0)) } // 0=low(75), 1=medium(150), 2=high(300), 3=custom (default: low)
+    var particleParallaxSensitivity by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "particle_parallax_sensitivity",
+                0
+            )
+        )
+    } // 0=low(0.15), 1=medium(0.3), 2=high(0.5)
+    var particleStarMode by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "particle_star_mode",
+                false
+            )
+        )
+    } // New: star mode toggle
+    var particleTimeMode by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "particle_time_mode",
+                true
+            )
+        )
+    } // Time-based sun & moon system
+    var timeOffsetHours by remember {
+        mutableStateOf(
+            prefs.getFloat(
+                "time_offset_hours",
+                0f
+            )
+        )
+    } // Developer: time offset
+    var particleCount by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "particle_count",
+                0
+            )
+        )
+    } // 0=low(75), 1=medium(150), 2=high(300), 3=custom (default: low)
     var particleCountCustom by remember { mutableStateOf(prefs.getInt("particle_count_custom", 150).toString()) }
-    var matrixMode          by remember { mutableStateOf(prefs.getBoolean("matrix_mode", true)) }
-    var matrixSpeed         by remember { mutableStateOf(prefs.getInt("matrix_speed", 1)) }          // 0=slow 1=medium 2=fast
-    var matrixDensity       by remember { mutableStateOf(prefs.getInt("matrix_density", 1)) }        // 0=sparse 1=medium 2=dense
-    var matrixFontSize      by remember { mutableStateOf(prefs.getInt("matrix_font_size", 1)) }      // 0=small 1=medium 2=large
-    var matrixFadeLength    by remember { mutableStateOf(prefs.getInt("matrix_fade_length", 1)) }    // 0=short 1=medium 2=full
-    var matrixBgAlpha       by remember { mutableStateOf(prefs.getFloat("matrix_bg_alpha", 0f)) }    // 0=transparent 1=black
+    var matrixMode by remember { mutableStateOf(prefs.getBoolean("matrix_mode", true)) }
+    var matrixSpeed by remember { mutableStateOf(prefs.getInt("matrix_speed", 1)) }          // 0=slow 1=medium 2=fast
+    var matrixDensity by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "matrix_density",
+                1
+            )
+        )
+    }        // 0=sparse 1=medium 2=dense
+    var matrixFontSize by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "matrix_font_size",
+                1
+            )
+        )
+    }      // 0=small 1=medium 2=large
+    var matrixFadeLength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                "matrix_fade_length",
+                1
+            )
+        )
+    }    // 0=short 1=medium 2=full
+    var matrixBgAlpha by remember { mutableStateOf(prefs.getFloat("matrix_bg_alpha", 0f)) }    // 0=transparent 1=black
     var themePreference by remember { mutableStateOf(prefs.getInt("theme_preference", 0)) }
 
     // New settings
@@ -525,25 +577,136 @@ fun GamaUI(
     var dozeMode by remember { mutableStateOf(prefs.getBoolean("doze_mode", false)) }
     var showGpuWatchButton by remember { mutableStateOf(prefs.getBoolean("show_gpuwatch_button", false)) }
     var staggerEnabled by remember { mutableStateOf(prefs.getBoolean("stagger_enabled", true)) }
-    var backButtonAvoidanceEnabled by remember { mutableStateOf(prefs.getBoolean("back_button_avoidance_enabled", true)) }
+    var backButtonAvoidanceEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "back_button_avoidance_enabled",
+                true
+            )
+        )
+    }
     var backButtonInversed by remember { mutableStateOf(prefs.getBoolean("back_button_inversed", false)) }
     var shadowsEnabled by remember { mutableStateOf(prefs.getBoolean("shadows_enabled", true)) }
-    var hapticsEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_ENABLED, GamaHaptics.DEFAULT_ENABLED)) }
-    var hapticsRegularEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_REGULAR_ENABLED, GamaHaptics.DEFAULT_REGULAR_ENABLED)) }
-    var hapticsHoldEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_HOLD_ENABLED, GamaHaptics.DEFAULT_HOLD_ENABLED)) }
-    var hapticsRendererEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_RENDERER_ENABLED, GamaHaptics.DEFAULT_RENDERER_ENABLED)) }
-    var hapticsLanguageEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_LANGUAGE_ENABLED, GamaHaptics.DEFAULT_LANGUAGE_ENABLED)) }
-    var hapticsBounceEnabled by remember { mutableStateOf(prefs.getBoolean(GamaHaptics.PREF_BOUNCE_ENABLED, GamaHaptics.DEFAULT_BOUNCE_ENABLED)) }
-    var hapticsRegularStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_REGULAR_STRENGTH, GamaHaptics.DEFAULT_REGULAR_STRENGTH)) }
-    var hapticsHoldStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_HOLD_STRENGTH, GamaHaptics.DEFAULT_HOLD_STRENGTH)) }
-    var hapticsRendererStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_RENDERER_STRENGTH, GamaHaptics.DEFAULT_RENDERER_STRENGTH)) }
-    var hapticsLanguageStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_LANGUAGE_STRENGTH, GamaHaptics.DEFAULT_LANGUAGE_STRENGTH)) }
-    var hapticsBounceStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_BOUNCE_STRENGTH, GamaHaptics.DEFAULT_BOUNCE_STRENGTH)) }
-    var hapticsBounceReturnStrength by remember { mutableStateOf(prefs.getInt(GamaHaptics.PREF_BOUNCE_RETURN_STRENGTH, GamaHaptics.DEFAULT_BOUNCE_RETURN_STRENGTH)) }
-    var particleNativeRefreshRate  by remember { mutableStateOf(prefs.getBoolean("particle_native_refresh_rate", false)) }
-    var particleQuarterRefreshRate by remember { mutableStateOf(prefs.getBoolean("particle_quarter_refresh_rate", false)) }
+    var hapticsEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_ENABLED,
+                GamaHaptics.DEFAULT_ENABLED
+            )
+        )
+    }
+    var hapticsRegularEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_REGULAR_ENABLED,
+                GamaHaptics.DEFAULT_REGULAR_ENABLED
+            )
+        )
+    }
+    var hapticsHoldEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_HOLD_ENABLED,
+                GamaHaptics.DEFAULT_HOLD_ENABLED
+            )
+        )
+    }
+    var hapticsRendererEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_RENDERER_ENABLED,
+                GamaHaptics.DEFAULT_RENDERER_ENABLED
+            )
+        )
+    }
+    var hapticsLanguageEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_LANGUAGE_ENABLED,
+                GamaHaptics.DEFAULT_LANGUAGE_ENABLED
+            )
+        )
+    }
+    var hapticsBounceEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                GamaHaptics.PREF_BOUNCE_ENABLED,
+                GamaHaptics.DEFAULT_BOUNCE_ENABLED
+            )
+        )
+    }
+    var hapticsRegularStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_REGULAR_STRENGTH,
+                GamaHaptics.DEFAULT_REGULAR_STRENGTH
+            )
+        )
+    }
+    var hapticsHoldStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_HOLD_STRENGTH,
+                GamaHaptics.DEFAULT_HOLD_STRENGTH
+            )
+        )
+    }
+    var hapticsRendererStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_RENDERER_STRENGTH,
+                GamaHaptics.DEFAULT_RENDERER_STRENGTH
+            )
+        )
+    }
+    var hapticsLanguageStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_LANGUAGE_STRENGTH,
+                GamaHaptics.DEFAULT_LANGUAGE_STRENGTH
+            )
+        )
+    }
+    var hapticsBounceStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_BOUNCE_STRENGTH,
+                GamaHaptics.DEFAULT_BOUNCE_STRENGTH
+            )
+        )
+    }
+    var hapticsBounceReturnStrength by remember {
+        mutableStateOf(
+            prefs.getInt(
+                GamaHaptics.PREF_BOUNCE_RETURN_STRENGTH,
+                GamaHaptics.DEFAULT_BOUNCE_RETURN_STRENGTH
+            )
+        )
+    }
+    var particleNativeRefreshRate by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "particle_native_refresh_rate",
+                false
+            )
+        )
+    }
+    var particleQuarterRefreshRate by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "particle_quarter_refresh_rate",
+                false
+            )
+        )
+    }
     // Using SnapshotStateList for instant updates
-    val excludedAppsList = remember { mutableStateListOf<String>().apply { addAll(prefs.getStringSet("excluded_apps", setOf()) ?: emptySet()) } }
+    val excludedAppsList = remember {
+        mutableStateListOf<String>().apply {
+            addAll(
+                prefs.getStringSet("excluded_apps", setOf()) ?: emptySet()
+            )
+        }
+    }
     var oledMode by remember { mutableStateOf(prefs.getBoolean("oled_mode", false)) }
     var oledAccentColor by remember { mutableStateOf(Color(prefs.getInt("oled_accent_color", 0xFF4895EF.toInt()))) }
     var useDynamicColorOLED by remember { mutableStateOf(prefs.getBoolean("use_dynamic_color_oled", false)) }
@@ -554,7 +717,16 @@ fun GamaUI(
     var customAccentColor by remember {
         mutableStateOf(sanitizeAccentColorForTheme(Color(prefs.getInt("custom_accent", 0xFF4895EF.toInt())), false))
     }
-    var customGradientStart by remember { mutableStateOf(Color(prefs.getInt("custom_gradient_start", 0xFF0A2540.toInt()))) }
+    var customGradientStart by remember {
+        mutableStateOf(
+            Color(
+                prefs.getInt(
+                    "custom_gradient_start",
+                    0xFF0A2540.toInt()
+                )
+            )
+        )
+    }
     var customGradientEnd by remember { mutableStateOf(Color(prefs.getInt("custom_gradient_end", 0xFF000000.toInt()))) }
 
     // Global back behavior toggle
@@ -562,7 +734,14 @@ fun GamaUI(
 
     // Aggressive mode confirmation
     var aggressiveModeConfirmed by remember { mutableStateOf(false) }
-    var dontShowAggressiveWarning by remember { mutableStateOf(prefs.getBoolean("dont_show_aggressive_warning", false)) }
+    var dontShowAggressiveWarning by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                "dont_show_aggressive_warning",
+                false
+            )
+        )
+    }
 
 
     // remember(timeOffsetHours): Calendar.getInstance() is called once per offset change,
@@ -699,22 +878,34 @@ fun GamaUI(
 
     val animatedEffectsAccent by animateColorAsState(
         targetValue = targetEffectsAccent,
-        animationSpec = if (animationLevel == 2) snap() else tween(durationMillis = if (themeModeSwitchInProgress) 820 else 340, easing = MotionTokens.Easing.velvet),
+        animationSpec = if (animationLevel == 2) snap() else tween(
+            durationMillis = if (themeModeSwitchInProgress) 820 else 340,
+            easing = MotionTokens.Easing.velvet
+        ),
         label = "effects_accent_anim"
     )
     val matrixHeadColor by animateColorAsState(
         targetValue = targetMatrixHeadColor,
-        animationSpec = if (animationLevel == 2) snap() else tween(durationMillis = if (themeModeSwitchInProgress) 820 else 340, easing = MotionTokens.Easing.velvet),
+        animationSpec = if (animationLevel == 2) snap() else tween(
+            durationMillis = if (themeModeSwitchInProgress) 820 else 340,
+            easing = MotionTokens.Easing.velvet
+        ),
         label = "matrix_head_color_anim"
     )
     val matrixRainColor by animateColorAsState(
         targetValue = targetMatrixRainColor,
-        animationSpec = if (animationLevel == 2) snap() else tween(durationMillis = if (themeModeSwitchInProgress) 820 else 340, easing = MotionTokens.Easing.velvet),
+        animationSpec = if (animationLevel == 2) snap() else tween(
+            durationMillis = if (themeModeSwitchInProgress) 820 else 340,
+            easing = MotionTokens.Easing.velvet
+        ),
         label = "matrix_rain_color_anim"
     )
     val matrixTrailColor by animateColorAsState(
         targetValue = targetMatrixTrailColor,
-        animationSpec = if (animationLevel == 2) snap() else tween(durationMillis = if (themeModeSwitchInProgress) 820 else 340, easing = MotionTokens.Easing.velvet),
+        animationSpec = if (animationLevel == 2) snap() else tween(
+            durationMillis = if (themeModeSwitchInProgress) 820 else 340,
+            easing = MotionTokens.Easing.velvet
+        ),
         label = "matrix_trail_color_anim"
     )
     // Determine target colors.
@@ -820,126 +1011,126 @@ fun GamaUI(
         // Snapshot every other Compose state value for the same reason: these objects
         // must only be read from the main thread, so we capture primitives/stable
         // values here before the coroutine crosses the thread boundary.
-        val snapAnimLevel        = animationLevel
-        val snapGradient         = gradientEnabled
-        val snapParticles        = particlesEnabled
-        val snapParticleSpeed    = particleSpeed
-        val snapParallax         = particleParallaxEnabled
-        val snapParallaxSens     = particleParallaxSensitivity
-        val snapStarMode         = particleStarMode
-        val snapTimeMode         = particleTimeMode
-        val snapTimeOffset       = timeOffsetHours
-        val snapParticleCount    = particleCount
-        val snapParticleCustom   = particleCountCustom.toIntOrNull() ?: 150
-        val snapBlur             = blurEnabled
-        val snapThemePref        = themePreference
-        val snapDynColor         = useDynamicColor
-        val snapAdvColorPicker   = advancedColorPicker
-        val snapAccent           = customAccentColor.toArgb()
-        val snapGradStart        = customGradientStart.toArgb()
-        val snapGradEnd          = customGradientEnd.toArgb()
-        val snapUiScale          = uiScale
-        val snapVerbose          = verboseMode
-        val snapAggressive       = aggressiveMode
-        val snapKillLauncher     = killLauncher
-        val snapKillKeyboard     = killKeyboard
-        val snapDoze             = dozeMode
-        val snapShowGpuWatch     = showGpuWatchButton
-        val snapStagger          = staggerEnabled
+        val snapAnimLevel = animationLevel
+        val snapGradient = gradientEnabled
+        val snapParticles = particlesEnabled
+        val snapParticleSpeed = particleSpeed
+        val snapParallax = particleParallaxEnabled
+        val snapParallaxSens = particleParallaxSensitivity
+        val snapStarMode = particleStarMode
+        val snapTimeMode = particleTimeMode
+        val snapTimeOffset = timeOffsetHours
+        val snapParticleCount = particleCount
+        val snapParticleCustom = particleCountCustom.toIntOrNull() ?: 150
+        val snapBlur = blurEnabled
+        val snapThemePref = themePreference
+        val snapDynColor = useDynamicColor
+        val snapAdvColorPicker = advancedColorPicker
+        val snapAccent = customAccentColor.toArgb()
+        val snapGradStart = customGradientStart.toArgb()
+        val snapGradEnd = customGradientEnd.toArgb()
+        val snapUiScale = uiScale
+        val snapVerbose = verboseMode
+        val snapAggressive = aggressiveMode
+        val snapKillLauncher = killLauncher
+        val snapKillKeyboard = killKeyboard
+        val snapDoze = dozeMode
+        val snapShowGpuWatch = showGpuWatchButton
+        val snapStagger = staggerEnabled
         val snapBackButtonAvoidance = backButtonAvoidanceEnabled
         val snapBackButtonInversed = backButtonInversed
-        val snapShadows          = shadowsEnabled
-        val snapHapticsEnabled   = hapticsEnabled
+        val snapShadows = shadowsEnabled
+        val snapHapticsEnabled = hapticsEnabled
         val snapHapticsRegularEnabled = hapticsRegularEnabled
-        val snapHapticsHoldEnabled    = hapticsHoldEnabled
+        val snapHapticsHoldEnabled = hapticsHoldEnabled
         val snapHapticsRendererEnabled = hapticsRendererEnabled
         val snapHapticsLanguageEnabled = hapticsLanguageEnabled
-        val snapHapticsBounceEnabled   = hapticsBounceEnabled
-        val snapHapticsRegular   = hapticsRegularStrength
-        val snapHapticsHold      = hapticsHoldStrength
-        val snapHapticsRenderer  = hapticsRendererStrength
-        val snapHapticsLanguage  = hapticsLanguageStrength
-        val snapHapticsBounce    = hapticsBounceStrength
+        val snapHapticsBounceEnabled = hapticsBounceEnabled
+        val snapHapticsRegular = hapticsRegularStrength
+        val snapHapticsHold = hapticsHoldStrength
+        val snapHapticsRenderer = hapticsRendererStrength
+        val snapHapticsLanguage = hapticsLanguageStrength
+        val snapHapticsBounce = hapticsBounceStrength
         val snapHapticsBounceReturn = hapticsBounceReturnStrength
-        val snapParticleNativeRefresh  = particleNativeRefreshRate
+        val snapParticleNativeRefresh = particleNativeRefreshRate
         val snapParticleQuarterRefresh = particleQuarterRefreshRate
-        val snapMatrixMode       = matrixMode
-        val snapMatrixSpeed      = matrixSpeed
-        val snapMatrixDensity    = matrixDensity
-        val snapMatrixFontSize   = matrixFontSize
+        val snapMatrixMode = matrixMode
+        val snapMatrixSpeed = matrixSpeed
+        val snapMatrixDensity = matrixDensity
+        val snapMatrixFontSize = matrixFontSize
         val snapMatrixFadeLength = matrixFadeLength
-        val snapMatrixBgAlpha    = matrixBgAlpha
-        val snapOled             = oledMode
-        val snapOledAccent       = oledAccentColor.toArgb()
-        val snapDynColorOled     = useDynamicColorOLED
-        val snapDismissOutside   = dismissOnClickOutside
-        val snapNotifEnabled     = notificationsEnabled
-        val snapNotifInterval    = notifIntervalIndex
-        val snapNotifLastSent    = lastNotifSentTime
-        val snapNotifPermReq     = notifPermissionRequested
+        val snapMatrixBgAlpha = matrixBgAlpha
+        val snapOled = oledMode
+        val snapOledAccent = oledAccentColor.toArgb()
+        val snapDynColorOled = useDynamicColorOLED
+        val snapDismissOutside = dismissOnClickOutside
+        val snapNotifEnabled = notificationsEnabled
+        val snapNotifInterval = notifIntervalIndex
+        val snapNotifLastSent = lastNotifSentTime
+        val snapNotifPermReq = notifPermissionRequested
 
         scope.launch(Dispatchers.IO) {
             prefs.edit().apply {
-                putInt("animation_level",               snapAnimLevel)
-                putBoolean("gradient_enabled",          snapGradient)
-                putBoolean("particles_enabled",         snapParticles)
-                putInt("particle_speed",                snapParticleSpeed)
+                putInt("animation_level", snapAnimLevel)
+                putBoolean("gradient_enabled", snapGradient)
+                putBoolean("particles_enabled", snapParticles)
+                putInt("particle_speed", snapParticleSpeed)
                 putBoolean("particle_parallax_enabled", snapParallax)
                 putInt("particle_parallax_sensitivity", snapParallaxSens)
-                putBoolean("particle_star_mode",        snapStarMode)
-                putBoolean("particle_time_mode",        snapTimeMode)
-                putFloat("time_offset_hours",           snapTimeOffset)
-                putInt("particle_count",                snapParticleCount)
-                putInt("particle_count_custom",         snapParticleCustom)
-                putBoolean("blur_enabled",              snapBlur)
-                putInt("theme_preference",              snapThemePref)
-                putBoolean("use_dynamic_color",         snapDynColor)
-                putBoolean("advanced_color_picker",     snapAdvColorPicker)
-                putInt("custom_accent",                 snapAccent)
-                putInt("custom_gradient_start",         snapGradStart)
-                putInt("custom_gradient_end",           snapGradEnd)
-                putInt("ui_scale",                      snapUiScale)
-                putBoolean("verbose_mode",              snapVerbose)
-                putBoolean("aggressive_mode",           snapAggressive)
-                putBoolean("kill_launcher",             snapKillLauncher)
-                putBoolean("kill_keyboard",             snapKillKeyboard)
-                putBoolean("doze_mode",                 snapDoze)
-                putBoolean("show_gpuwatch_button",      snapShowGpuWatch)
-                putBoolean("stagger_enabled",           snapStagger)
+                putBoolean("particle_star_mode", snapStarMode)
+                putBoolean("particle_time_mode", snapTimeMode)
+                putFloat("time_offset_hours", snapTimeOffset)
+                putInt("particle_count", snapParticleCount)
+                putInt("particle_count_custom", snapParticleCustom)
+                putBoolean("blur_enabled", snapBlur)
+                putInt("theme_preference", snapThemePref)
+                putBoolean("use_dynamic_color", snapDynColor)
+                putBoolean("advanced_color_picker", snapAdvColorPicker)
+                putInt("custom_accent", snapAccent)
+                putInt("custom_gradient_start", snapGradStart)
+                putInt("custom_gradient_end", snapGradEnd)
+                putInt("ui_scale", snapUiScale)
+                putBoolean("verbose_mode", snapVerbose)
+                putBoolean("aggressive_mode", snapAggressive)
+                putBoolean("kill_launcher", snapKillLauncher)
+                putBoolean("kill_keyboard", snapKillKeyboard)
+                putBoolean("doze_mode", snapDoze)
+                putBoolean("show_gpuwatch_button", snapShowGpuWatch)
+                putBoolean("stagger_enabled", snapStagger)
                 putBoolean("back_button_avoidance_enabled", snapBackButtonAvoidance)
-                putBoolean("back_button_inversed",      snapBackButtonInversed)
-                putBoolean("shadows_enabled",           snapShadows)
-                putBoolean(GamaHaptics.PREF_ENABLED,     snapHapticsEnabled)
-                putBoolean(GamaHaptics.PREF_REGULAR_ENABLED,  snapHapticsRegularEnabled)
-                putBoolean(GamaHaptics.PREF_HOLD_ENABLED,     snapHapticsHoldEnabled)
+                putBoolean("back_button_inversed", snapBackButtonInversed)
+                putBoolean("shadows_enabled", snapShadows)
+                putBoolean(GamaHaptics.PREF_ENABLED, snapHapticsEnabled)
+                putBoolean(GamaHaptics.PREF_REGULAR_ENABLED, snapHapticsRegularEnabled)
+                putBoolean(GamaHaptics.PREF_HOLD_ENABLED, snapHapticsHoldEnabled)
                 putBoolean(GamaHaptics.PREF_RENDERER_ENABLED, snapHapticsRendererEnabled)
                 putBoolean(GamaHaptics.PREF_LANGUAGE_ENABLED, snapHapticsLanguageEnabled)
-                putBoolean(GamaHaptics.PREF_BOUNCE_ENABLED,   snapHapticsBounceEnabled)
-                putInt(GamaHaptics.PREF_REGULAR_STRENGTH,  snapHapticsRegular)
-                putInt(GamaHaptics.PREF_HOLD_STRENGTH,     snapHapticsHold)
+                putBoolean(GamaHaptics.PREF_BOUNCE_ENABLED, snapHapticsBounceEnabled)
+                putInt(GamaHaptics.PREF_REGULAR_STRENGTH, snapHapticsRegular)
+                putInt(GamaHaptics.PREF_HOLD_STRENGTH, snapHapticsHold)
                 putInt(GamaHaptics.PREF_RENDERER_STRENGTH, snapHapticsRenderer)
                 putInt(GamaHaptics.PREF_LANGUAGE_STRENGTH, snapHapticsLanguage)
-                putInt(GamaHaptics.PREF_BOUNCE_STRENGTH,   snapHapticsBounce)
+                putInt(GamaHaptics.PREF_BOUNCE_STRENGTH, snapHapticsBounce)
                 putInt(GamaHaptics.PREF_BOUNCE_RETURN_STRENGTH, snapHapticsBounceReturn)
-                putBoolean("particle_native_refresh_rate",  snapParticleNativeRefresh)
+                putBoolean("particle_native_refresh_rate", snapParticleNativeRefresh)
                 putBoolean("particle_quarter_refresh_rate", snapParticleQuarterRefresh)
-                putBoolean("matrix_native_refresh_rate",    false)
-                putBoolean("matrix_quarter_refresh_rate",   false)
-                putBoolean("matrix_mode",          snapMatrixMode)
-                putInt("matrix_speed",             snapMatrixSpeed)
-                putInt("matrix_density",           snapMatrixDensity)
-                putInt("matrix_font_size",         snapMatrixFontSize)
-                putInt("matrix_fade_length",       snapMatrixFadeLength)
-                putFloat("matrix_bg_alpha",        snapMatrixBgAlpha)
-                putStringSet("excluded_apps",           excludedAppsSnapshot)
-                putBoolean("oled_mode",                 snapOled)
-                putInt("oled_accent_color",             snapOledAccent)
-                putBoolean("use_dynamic_color_oled",    snapDynColorOled)
-                putBoolean("dismiss_on_click_outside",  snapDismissOutside)
-                putBoolean("notif_enabled",             snapNotifEnabled)
-                putInt("notif_interval_idx",            snapNotifInterval)
-                putLong("notif_last_sent",              snapNotifLastSent)
-                putBoolean("notif_perm_requested",      snapNotifPermReq)
+                putBoolean("matrix_native_refresh_rate", false)
+                putBoolean("matrix_quarter_refresh_rate", false)
+                putBoolean("matrix_mode", snapMatrixMode)
+                putInt("matrix_speed", snapMatrixSpeed)
+                putInt("matrix_density", snapMatrixDensity)
+                putInt("matrix_font_size", snapMatrixFontSize)
+                putInt("matrix_fade_length", snapMatrixFadeLength)
+                putFloat("matrix_bg_alpha", snapMatrixBgAlpha)
+                putStringSet("excluded_apps", excludedAppsSnapshot)
+                putBoolean("oled_mode", snapOled)
+                putInt("oled_accent_color", snapOledAccent)
+                putBoolean("use_dynamic_color_oled", snapDynColorOled)
+                putBoolean("dismiss_on_click_outside", snapDismissOutside)
+                putBoolean("notif_enabled", snapNotifEnabled)
+                putInt("notif_interval_idx", snapNotifInterval)
+                putLong("notif_last_sent", snapNotifLastSent)
+                putBoolean("notif_perm_requested", snapNotifPermReq)
                 apply()
             }
         }
@@ -1010,28 +1201,28 @@ fun GamaUI(
     val anyPanelOpen by remember {
         derivedStateOf {
             showWarningDialog || showGitHubDialog || showResourcesPanel || showExternalLinkConfirm ||
-            showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
-            showSystem || showRendererPanel ||
-            showShizukuHelp || showSuccessDialog ||
-            showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
-            showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
-            showEffects || showParticles || showParticlesAppearance ||
-            showParticlesMotion || showParticlesPerformance || showMatrixSettings || showMatrixAppearance ||
-            showMatrixMotion || showParticlesSettings || showIntegrationInfoDialog
+                    showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
+                    showSystem || showRendererPanel ||
+                    showShizukuHelp || showSuccessDialog ||
+                    showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
+                    showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
+                    showEffects || showParticles || showParticlesAppearance ||
+                    showParticlesMotion || showParticlesPerformance || showMatrixSettings || showMatrixAppearance ||
+                    showMatrixMotion || showParticlesSettings || showIntegrationInfoDialog
         }
     }
 
     val anyFullPanelOpen by remember {
         derivedStateOf {
             showWarningDialog || showGitHubDialog || showResourcesPanel ||
-            showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
-            showSystem || showRendererPanel ||
-            showShizukuHelp || showSuccessDialog ||
-            showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
-            showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
-            showEffects || showParticles || showParticlesAppearance ||
-            showParticlesMotion || showParticlesPerformance || showMatrixSettings || showMatrixAppearance ||
-            showMatrixMotion || showParticlesSettings
+                    showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
+                    showSystem || showRendererPanel ||
+                    showShizukuHelp || showSuccessDialog ||
+                    showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
+                    showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
+                    showEffects || showParticles || showParticlesAppearance ||
+                    showParticlesMotion || showParticlesPerformance || showMatrixSettings || showMatrixAppearance ||
+                    showMatrixMotion || showParticlesSettings
         }
     }
 
@@ -1063,7 +1254,9 @@ fun GamaUI(
     val currentVersion = remember {
         try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—"
-        } catch (_: Exception) { "—" }
+        } catch (_: Exception) {
+            "—"
+        }
     }
 
     // Gradient "Come Alive" Animation on Startup
@@ -1123,7 +1316,8 @@ fun GamaUI(
 
         shizukuStatus = if (shizukuRunning) {
             if (shizukuPermissionGranted) {
-                if (userName.isNotEmpty()) strings["main.shizuku_ready_named"].replace("%s", userName).ifEmpty { "You're all set, $userName! ✅" } else strings["main.shizuku_ready"].ifEmpty { "Shizuku is running ✅" }
+                if (userName.isNotEmpty()) strings["main.shizuku_ready_named"].replace("%s", userName)
+                    .ifEmpty { "You're all set, $userName! ✅" } else strings["main.shizuku_ready"].ifEmpty { "Shizuku is running ✅" }
             } else {
                 strings["main.shizuku_permission_needed"].ifEmpty { "Permission needed ⚠️" }
             }
@@ -1152,6 +1346,7 @@ fun GamaUI(
                         currentRenderer = detectedRenderer
                         prefs.edit().putString("last_renderer", detectedRenderer).apply()
                     }
+
                     "Default", "Not Set" -> {
                         // Prop is empty — post-reboot state means OpenGL default
                         currentRenderer = "OpenGL"
@@ -1172,10 +1367,10 @@ fun GamaUI(
                     // Only trust the wall-clock comparison when the switch was
                     // recent (< 12 hours ago) to avoid false positives on old switches.
                     val lastSwitchMs = prefs.getLong("last_switch_time", 0L)
-                    val bootTimeMs   = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()
+                    val bootTimeMs = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()
                     lastSwitchMs > 0L &&
-                        bootTimeMs > lastSwitchMs &&
-                        (System.currentTimeMillis() - lastSwitchMs) < 12 * 60 * 60 * 1000L
+                            bootTimeMs > lastSwitchMs &&
+                            (System.currentTimeMillis() - lastSwitchMs) < 12 * 60 * 60 * 1000L
                 }
                 if (rebootDetected && prefs.getString("last_renderer", "OpenGL") == "Vulkan") {
                     currentRenderer = "OpenGL"
@@ -1262,6 +1457,7 @@ fun GamaUI(
     val currentDensity = LocalDensity.current
     CompositionLocalProvider(
         LocalAnimationLevel provides animationLevel,
+        LocalAnimationSpeed provides animationSpeed,
         LocalThemeColors provides colors,
         LocalUIScale provides uiScale,
         LocalDismissOnClickOutside provides dismissOnClickOutside,
@@ -1283,7 +1479,10 @@ fun GamaUI(
             // Gradient Overlay
             val gradientAlpha by animateFloatAsState(
                 targetValue = if (gradientEnabled && !effectiveOledMode) 1f else 0f,
-                animationSpec = if (animationLevel == 2) snap<Float>() else tween<Float>(durationMillis = if (themeModeSwitchInProgress) 760 else 260, easing = MotionTokens.Easing.velvet),
+                animationSpec = if (animationLevel == 2) snap<Float>() else tween<Float>(
+                    durationMillis = if (themeModeSwitchInProgress) 760 else 260,
+                    easing = MotionTokens.Easing.velvet
+                ),
                 label = "gradient_visibility"
             )
 
@@ -1375,12 +1574,12 @@ fun GamaUI(
                     if (isLandscape) {
                         // Landscape Layout — portrait style, split left/right, perfectly fitted
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val lsAvailH  = maxHeight
-                            val lsAvailW  = maxWidth
+                            val lsAvailH = maxHeight
+                            val lsAvailW = maxWidth
                             // All spacing derived from available height so nothing ever overflows
-                            val lsItemSp  = (lsAvailH * 0.036f).coerceIn(6.dp,  14.dp)
-                            val lsVPad    = (lsAvailH * 0.07f ).coerceIn(10.dp, 28.dp)
-                            val lsHPad    = (lsAvailW * 0.025f).coerceIn(16.dp, 32.dp)
+                            val lsItemSp = (lsAvailH * 0.036f).coerceIn(6.dp, 14.dp)
+                            val lsVPad = (lsAvailH * 0.07f).coerceIn(10.dp, 28.dp)
+                            val lsHPad = (lsAvailW * 0.025f).coerceIn(16.dp, 32.dp)
 
                             Row(modifier = Modifier.fillMaxSize()) {
 
@@ -1392,20 +1591,122 @@ fun GamaUI(
                                         .weight(1f)
                                         .padding(horizontal = lsHPad, vertical = lsVPad),
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement  = Arrangement.Center
+                                    verticalArrangement = Arrangement.Center
                                 ) {
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement  = Arrangement.spacedBy(lsItemSp)
+                                        verticalArrangement = Arrangement.spacedBy(lsItemSp)
                                     ) {
                                         // Greeting — same compact pools as portrait
                                         val lsGreeting = remember(currentHour, userName, strings) {
                                             val pool: Array<String> = when (currentHour) {
-                                                in 0..5   -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_late_named_1"].replace("%s",userName).ifEmpty{"Still up, $userName? 🌙"},strings["greetings.compact_late_named_2"].replace("%s",userName).ifEmpty{"Late night session, $userName? 🌙"},strings["greetings.compact_late_named_3"].replace("%s",userName).ifEmpty{"The world is quiet, $userName. 🌙"},strings["greetings.compact_late_named_4"].replace("%s",userName).ifEmpty{"Somewhere between today and tomorrow, $userName. 🌙"}) else arrayOf(strings["greetings.compact_late_1"].ifEmpty{"Still up? 🌙"},strings["greetings.compact_late_2"].ifEmpty{"Late night session? 🌙"},strings["greetings.compact_late_3"].ifEmpty{"The world is quiet. 🌙"},strings["greetings.compact_late_4"].ifEmpty{"Somewhere between today and tomorrow. 🌙"})
-                                                in 6..11  -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_morning_named_1"].replace("%s",userName).ifEmpty{"Good morning, $userName! ☀️"},strings["greetings.compact_morning_named_2"].replace("%s",userName).ifEmpty{"Morning, $userName! ☀️"},strings["greetings.compact_morning_named_3"].replace("%s",userName).ifEmpty{"Rise and shine, $userName! ☀️"},strings["greetings.compact_morning_named_4"].replace("%s",userName).ifEmpty{"A fresh start, $userName. ☀️"},strings["greetings.compact_morning_named_5"].replace("%s",userName).ifEmpty{"Up early, $userName? ☀️"}) else arrayOf(strings["greetings.compact_morning_1"].ifEmpty{"Good morning! ☀️"},strings["greetings.compact_morning_2"].ifEmpty{"Morning! ☀️"},strings["greetings.compact_morning_3"].ifEmpty{"Rise and shine! ☀️"},strings["greetings.compact_morning_4"].ifEmpty{"A fresh start. ☀️"},strings["greetings.compact_morning_5"].ifEmpty{"Up early? ☀️"})
-                                                in 12..16 -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_afternoon_named_1"].replace("%s",userName).ifEmpty{"Hey, $userName! 👋"},strings["greetings.compact_afternoon_named_2"].replace("%s",userName).ifEmpty{"Good afternoon, $userName! 👋"},strings["greetings.compact_afternoon_named_3"].replace("%s",userName).ifEmpty{"Welcome back, $userName. 👋"},strings["greetings.compact_afternoon_named_4"].replace("%s",userName).ifEmpty{"There you are, $userName! 👋"},strings["greetings.compact_afternoon_named_5"].replace("%s",userName).ifEmpty{"Good to see you, $userName. 👋"}) else arrayOf(strings["greetings.compact_afternoon_1"].ifEmpty{"Hey! 👋"},strings["greetings.compact_afternoon_2"].ifEmpty{"Good afternoon! 👋"},strings["greetings.compact_afternoon_3"].ifEmpty{"Welcome back. 👋"},strings["greetings.compact_afternoon_4"].ifEmpty{"There you are! 👋"},strings["greetings.compact_afternoon_5"].ifEmpty{"Good to see you. 👋"})
-                                                in 17..22 -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_evening_named_1"].replace("%s",userName).ifEmpty{"Good evening, $userName! 🌙"},strings["greetings.compact_evening_named_2"].replace("%s",userName).ifEmpty{"Evening, $userName. 🌙"},strings["greetings.compact_evening_named_3"].replace("%s",userName).ifEmpty{"Winding down, $userName? 🌙"},strings["greetings.compact_evening_named_4"].replace("%s",userName).ifEmpty{"End of the day, $userName. 🌙"},strings["greetings.compact_evening_named_5"].replace("%s",userName).ifEmpty{"Hope it was a good one, $userName. 🌙"}) else arrayOf(strings["greetings.compact_evening_1"].ifEmpty{"Good evening! 🌙"},strings["greetings.compact_evening_2"].ifEmpty{"Evening. 🌙"},strings["greetings.compact_evening_3"].ifEmpty{"Winding down? 🌙"},strings["greetings.compact_evening_4"].ifEmpty{"End of the day. 🌙"},strings["greetings.compact_evening_5"].ifEmpty{"Hope it was a good one. 🌙"})
-                                                else      -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_midnight_named_1"].replace("%s",userName).ifEmpty{"Still at it, $userName? 🌙"},strings["greetings.compact_midnight_named_2"].replace("%s",userName).ifEmpty{"The quiet hours, $userName. 🌙"},strings["greetings.compact_midnight_named_3"].replace("%s",userName).ifEmpty{"Almost tomorrow, $userName. 🌙"},strings["greetings.compact_midnight_named_4"].replace("%s",userName).ifEmpty{"Some nights are for thinking, $userName. 🌙"},strings["greetings.compact_midnight_named_5"].replace("%s",userName).ifEmpty{"The world can wait, $userName. 🌙"}) else arrayOf(strings["greetings.compact_midnight_1"].ifEmpty{"Still at it? 🌙"},strings["greetings.compact_midnight_2"].ifEmpty{"The quiet hours. 🌙"},strings["greetings.compact_midnight_3"].ifEmpty{"Almost tomorrow. 🌙"},strings["greetings.compact_midnight_4"].ifEmpty{"Some nights are for thinking. 🌙"},strings["greetings.compact_midnight_5"].ifEmpty{"The world can wait. 🌙"})
+                                                in 0..5 -> if (userName.isNotEmpty()) arrayOf(
+                                                    strings["greetings.compact_late_named_1"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Still up, $userName? 🌙" },
+                                                    strings["greetings.compact_late_named_2"].replace("%s", userName)
+                                                        .ifEmpty { "Late night session, $userName? 🌙" },
+                                                    strings["greetings.compact_late_named_3"].replace("%s", userName)
+                                                        .ifEmpty { "The world is quiet, $userName. 🌙" },
+                                                    strings["greetings.compact_late_named_4"].replace("%s", userName)
+                                                        .ifEmpty { "Somewhere between today and tomorrow, $userName. 🌙" }) else arrayOf(
+                                                    strings["greetings.compact_late_1"].ifEmpty { "Still up? 🌙" },
+                                                    strings["greetings.compact_late_2"].ifEmpty { "Late night session? 🌙" },
+                                                    strings["greetings.compact_late_3"].ifEmpty { "The world is quiet. 🌙" },
+                                                    strings["greetings.compact_late_4"].ifEmpty { "Somewhere between today and tomorrow. 🌙" })
+
+                                                in 6..11 -> if (userName.isNotEmpty()) arrayOf(
+                                                    strings["greetings.compact_morning_named_1"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Good morning, $userName! ☀️" },
+                                                    strings["greetings.compact_morning_named_2"].replace("%s", userName)
+                                                        .ifEmpty { "Morning, $userName! ☀️" },
+                                                    strings["greetings.compact_morning_named_3"].replace("%s", userName)
+                                                        .ifEmpty { "Rise and shine, $userName! ☀️" },
+                                                    strings["greetings.compact_morning_named_4"].replace("%s", userName)
+                                                        .ifEmpty { "A fresh start, $userName. ☀️" },
+                                                    strings["greetings.compact_morning_named_5"].replace("%s", userName)
+                                                        .ifEmpty { "Up early, $userName? ☀️" }) else arrayOf(
+                                                    strings["greetings.compact_morning_1"].ifEmpty { "Good morning! ☀️" },
+                                                    strings["greetings.compact_morning_2"].ifEmpty { "Morning! ☀️" },
+                                                    strings["greetings.compact_morning_3"].ifEmpty { "Rise and shine! ☀️" },
+                                                    strings["greetings.compact_morning_4"].ifEmpty { "A fresh start. ☀️" },
+                                                    strings["greetings.compact_morning_5"].ifEmpty { "Up early? ☀️" })
+
+                                                in 12..16 -> if (userName.isNotEmpty()) arrayOf(
+                                                    strings["greetings.compact_afternoon_named_1"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Hey, $userName! 👋" },
+                                                    strings["greetings.compact_afternoon_named_2"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Good afternoon, $userName! 👋" },
+                                                    strings["greetings.compact_afternoon_named_3"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Welcome back, $userName. 👋" },
+                                                    strings["greetings.compact_afternoon_named_4"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "There you are, $userName! 👋" },
+                                                    strings["greetings.compact_afternoon_named_5"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Good to see you, $userName. 👋" }) else arrayOf(
+                                                    strings["greetings.compact_afternoon_1"].ifEmpty { "Hey! 👋" },
+                                                    strings["greetings.compact_afternoon_2"].ifEmpty { "Good afternoon! 👋" },
+                                                    strings["greetings.compact_afternoon_3"].ifEmpty { "Welcome back. 👋" },
+                                                    strings["greetings.compact_afternoon_4"].ifEmpty { "There you are! 👋" },
+                                                    strings["greetings.compact_afternoon_5"].ifEmpty { "Good to see you. 👋" })
+
+                                                in 17..22 -> if (userName.isNotEmpty()) arrayOf(
+                                                    strings["greetings.compact_evening_named_1"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Good evening, $userName! 🌙" },
+                                                    strings["greetings.compact_evening_named_2"].replace("%s", userName)
+                                                        .ifEmpty { "Evening, $userName. 🌙" },
+                                                    strings["greetings.compact_evening_named_3"].replace("%s", userName)
+                                                        .ifEmpty { "Winding down, $userName? 🌙" },
+                                                    strings["greetings.compact_evening_named_4"].replace("%s", userName)
+                                                        .ifEmpty { "End of the day, $userName. 🌙" },
+                                                    strings["greetings.compact_evening_named_5"].replace("%s", userName)
+                                                        .ifEmpty { "Hope it was a good one, $userName. 🌙" }) else arrayOf(
+                                                    strings["greetings.compact_evening_1"].ifEmpty { "Good evening! 🌙" },
+                                                    strings["greetings.compact_evening_2"].ifEmpty { "Evening. 🌙" },
+                                                    strings["greetings.compact_evening_3"].ifEmpty { "Winding down? 🌙" },
+                                                    strings["greetings.compact_evening_4"].ifEmpty { "End of the day. 🌙" },
+                                                    strings["greetings.compact_evening_5"].ifEmpty { "Hope it was a good one. 🌙" })
+
+                                                else -> if (userName.isNotEmpty()) arrayOf(
+                                                    strings["greetings.compact_midnight_named_1"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Still at it, $userName? 🌙" },
+                                                    strings["greetings.compact_midnight_named_2"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "The quiet hours, $userName. 🌙" },
+                                                    strings["greetings.compact_midnight_named_3"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Almost tomorrow, $userName. 🌙" },
+                                                    strings["greetings.compact_midnight_named_4"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "Some nights are for thinking, $userName. 🌙" },
+                                                    strings["greetings.compact_midnight_named_5"].replace(
+                                                        "%s",
+                                                        userName
+                                                    ).ifEmpty { "The world can wait, $userName. 🌙" }) else arrayOf(
+                                                    strings["greetings.compact_midnight_1"].ifEmpty { "Still at it? 🌙" },
+                                                    strings["greetings.compact_midnight_2"].ifEmpty { "The quiet hours. 🌙" },
+                                                    strings["greetings.compact_midnight_3"].ifEmpty { "Almost tomorrow. 🌙" },
+                                                    strings["greetings.compact_midnight_4"].ifEmpty { "Some nights are for thinking. 🌙" },
+                                                    strings["greetings.compact_midnight_5"].ifEmpty { "The world can wait. 🌙" })
                                             }
                                             pool.random()
                                         }
@@ -1609,7 +1910,10 @@ fun GamaUI(
                                                     drawRoundRect(
                                                         color = colors.primaryAccent.copy(alpha = 0.44f),
                                                         topLeft = Offset(inset, inset),
-                                                        size = Size(size.width - outlineWidth, size.height - outlineWidth),
+                                                        size = Size(
+                                                            size.width - outlineWidth,
+                                                            size.height - outlineWidth
+                                                        ),
                                                         cornerRadius = CornerRadius(radius, radius),
                                                         style = Stroke(width = outlineWidth)
                                                     )
@@ -1662,7 +1966,8 @@ fun GamaUI(
                                                         onClick = {
                                                             performRendererHaptic()
                                                             if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                                shizukuHelpType = if (!shizukuRunning) "not_running" else "permission"
+                                                                shizukuHelpType =
+                                                                    if (!shizukuRunning) "not_running" else "permission"
                                                                 openMainPanelExclusive { showShizukuHelp = true }
                                                                 return@BigRendererButton
                                                             }
@@ -1679,7 +1984,8 @@ fun GamaUI(
                                                                     if (verboseMode) { output -> verboseOutput += output } else null
                                                                 )
                                                             }
-                                                            successDialogMessage = strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
+                                                            successDialogMessage =
+                                                                strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
                                                             openMainPanelExclusive { showWarningDialog = true }
                                                         },
                                                         modifier = Modifier.weight(1f),
@@ -1695,7 +2001,8 @@ fun GamaUI(
                                                         onClick = {
                                                             performRendererHaptic()
                                                             if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                                shizukuHelpType = if (!shizukuRunning) "not_running" else "permission"
+                                                                shizukuHelpType =
+                                                                    if (!shizukuRunning) "not_running" else "permission"
                                                                 openMainPanelExclusive { showShizukuHelp = true }
                                                                 return@BigRendererButton
                                                             }
@@ -1712,7 +2019,8 @@ fun GamaUI(
                                                                     if (verboseMode) { output -> verboseOutput += output } else null
                                                                 )
                                                             }
-                                                            successDialogMessage = strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
+                                                            successDialogMessage =
+                                                                strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
                                                             openMainPanelExclusive { showWarningDialog = true }
                                                         },
                                                         modifier = Modifier.weight(1f),
@@ -1742,13 +2050,21 @@ fun GamaUI(
                                                             openMainPanelExclusive { showResourcesPanel = true }
                                                         },
                                                         modifier = if (showGpuWatchButton) Modifier.weight(1f) else Modifier.fillMaxWidth(),
-                                                        accent = false, enabled = true,
-                                                        colors = colors, oledMode = effectiveOledMode, iconType = "resources"
+                                                        accent = false,
+                                                        enabled = true,
+                                                        colors = colors,
+                                                        oledMode = effectiveOledMode,
+                                                        iconType = "resources"
                                                     )
                                                     AnimatedVisibility(
                                                         modifier = Modifier.weight(1f),
                                                         visible = showGpuWatchButton,
-                                                        enter = fadeIn(animationSpec = tween(220, easing = MotionTokens.Easing.enter)) +
+                                                        enter = fadeIn(
+                                                            animationSpec = tween(
+                                                                220,
+                                                                easing = MotionTokens.Easing.enter
+                                                            )
+                                                        ) +
                                                                 expandHorizontally(
                                                                     animationSpec = spring(
                                                                         dampingRatio = MotionTokens.Springs.smooth.dampingRatio,
@@ -1763,14 +2079,25 @@ fun GamaUI(
                                                                         stiffness = MotionTokens.Springs.gentle.stiffness
                                                                     )
                                                                 ),
-                                                        exit = fadeOut(animationSpec = tween(160, easing = MotionTokens.Easing.exit)) +
+                                                        exit = fadeOut(
+                                                            animationSpec = tween(
+                                                                160,
+                                                                easing = MotionTokens.Easing.exit
+                                                            )
+                                                        ) +
                                                                 shrinkHorizontally(
-                                                                    animationSpec = tween(180, easing = MotionTokens.Easing.exit),
+                                                                    animationSpec = tween(
+                                                                        180,
+                                                                        easing = MotionTokens.Easing.exit
+                                                                    ),
                                                                     shrinkTowards = Alignment.Start
                                                                 ) +
                                                                 scaleOut(
                                                                     targetScale = 0.88f,
-                                                                    animationSpec = tween(160, easing = MotionTokens.Easing.exit)
+                                                                    animationSpec = tween(
+                                                                        160,
+                                                                        easing = MotionTokens.Easing.exit
+                                                                    )
                                                                 )
                                                     ) {
                                                         IllustratedButton(
@@ -1780,8 +2107,11 @@ fun GamaUI(
                                                                 openMainPanelExclusive { showGPUWatchConfirm = true }
                                                             },
                                                             modifier = Modifier.fillMaxWidth(),
-                                                            accent = false, enabled = true,
-                                                            colors = colors, oledMode = effectiveOledMode, iconType = "gpuwatch"
+                                                            accent = false,
+                                                            enabled = true,
+                                                            colors = colors,
+                                                            oledMode = effectiveOledMode,
+                                                            iconType = "gpuwatch"
                                                         )
                                                     }
                                                 }
@@ -1810,16 +2140,104 @@ fun GamaUI(
                                 // not on every recomposition that happens during the 585 ms fade-in.
                                 val greeting = remember(currentHour, userName, strings) {
                                     val pool: Array<String> = when (currentHour) {
-                                        in 0..5   -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_late_named_1"].replace("%s",userName).ifEmpty{"Still up, $userName? 🌙"},strings["greetings.compact_late_named_2"].replace("%s",userName).ifEmpty{"Late night session, $userName? 🌙"},strings["greetings.compact_late_named_3"].replace("%s",userName).ifEmpty{"The world is quiet, $userName. 🌙"},strings["greetings.compact_late_named_4"].replace("%s",userName).ifEmpty{"Somewhere between today and tomorrow, $userName. 🌙"}) else arrayOf(strings["greetings.compact_late_1"].ifEmpty{"Still up? 🌙"},strings["greetings.compact_late_2"].ifEmpty{"Late night session? 🌙"},strings["greetings.compact_late_3"].ifEmpty{"The world is quiet. 🌙"},strings["greetings.compact_late_4"].ifEmpty{"Somewhere between today and tomorrow. 🌙"})
-                                        in 6..11  -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_morning_named_1"].replace("%s",userName).ifEmpty{"Good morning, $userName! ☀️"},strings["greetings.compact_morning_named_2"].replace("%s",userName).ifEmpty{"Morning, $userName! ☀️"},strings["greetings.compact_morning_named_3"].replace("%s",userName).ifEmpty{"Rise and shine, $userName! ☀️"},strings["greetings.compact_morning_named_4"].replace("%s",userName).ifEmpty{"A fresh start, $userName. ☀️"},strings["greetings.compact_morning_named_5"].replace("%s",userName).ifEmpty{"Up early, $userName? ☀️"}) else arrayOf(strings["greetings.compact_morning_1"].ifEmpty{"Good morning! ☀️"},strings["greetings.compact_morning_2"].ifEmpty{"Morning! ☀️"},strings["greetings.compact_morning_3"].ifEmpty{"Rise and shine! ☀️"},strings["greetings.compact_morning_4"].ifEmpty{"A fresh start. ☀️"},strings["greetings.compact_morning_5"].ifEmpty{"Up early? ☀️"})
-                                        in 12..16 -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_afternoon_named_1"].replace("%s",userName).ifEmpty{"Hey, $userName! 👋"},strings["greetings.compact_afternoon_named_2"].replace("%s",userName).ifEmpty{"Good afternoon, $userName! 👋"},strings["greetings.compact_afternoon_named_3"].replace("%s",userName).ifEmpty{"Welcome back, $userName. 👋"},strings["greetings.compact_afternoon_named_4"].replace("%s",userName).ifEmpty{"There you are, $userName! 👋"},strings["greetings.compact_afternoon_named_5"].replace("%s",userName).ifEmpty{"Good to see you, $userName. 👋"}) else arrayOf(strings["greetings.compact_afternoon_1"].ifEmpty{"Hey! 👋"},strings["greetings.compact_afternoon_2"].ifEmpty{"Good afternoon! 👋"},strings["greetings.compact_afternoon_3"].ifEmpty{"Welcome back. 👋"},strings["greetings.compact_afternoon_4"].ifEmpty{"There you are! 👋"},strings["greetings.compact_afternoon_5"].ifEmpty{"Good to see you. 👋"})
-                                        in 17..22 -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_evening_named_1"].replace("%s",userName).ifEmpty{"Good evening, $userName! 🌙"},strings["greetings.compact_evening_named_2"].replace("%s",userName).ifEmpty{"Evening, $userName. 🌙"},strings["greetings.compact_evening_named_3"].replace("%s",userName).ifEmpty{"Winding down, $userName? 🌙"},strings["greetings.compact_evening_named_4"].replace("%s",userName).ifEmpty{"End of the day, $userName. 🌙"},strings["greetings.compact_evening_named_5"].replace("%s",userName).ifEmpty{"Hope it was a good one, $userName. 🌙"}) else arrayOf(strings["greetings.compact_evening_1"].ifEmpty{"Good evening! 🌙"},strings["greetings.compact_evening_2"].ifEmpty{"Evening. 🌙"},strings["greetings.compact_evening_3"].ifEmpty{"Winding down? 🌙"},strings["greetings.compact_evening_4"].ifEmpty{"End of the day. 🌙"},strings["greetings.compact_evening_5"].ifEmpty{"Hope it was a good one. 🌙"})
-                                        else      -> if (userName.isNotEmpty()) arrayOf(strings["greetings.compact_midnight_named_1"].replace("%s",userName).ifEmpty{"Still at it, $userName? 🌙"},strings["greetings.compact_midnight_named_2"].replace("%s",userName).ifEmpty{"The quiet hours, $userName. 🌙"},strings["greetings.compact_midnight_named_3"].replace("%s",userName).ifEmpty{"Almost tomorrow, $userName. 🌙"},strings["greetings.compact_midnight_named_4"].replace("%s",userName).ifEmpty{"Some nights are for thinking, $userName. 🌙"},strings["greetings.compact_midnight_named_5"].replace("%s",userName).ifEmpty{"The world can wait, $userName. 🌙"}) else arrayOf(strings["greetings.compact_midnight_1"].ifEmpty{"Still at it? 🌙"},strings["greetings.compact_midnight_2"].ifEmpty{"The quiet hours. 🌙"},strings["greetings.compact_midnight_3"].ifEmpty{"Almost tomorrow. 🌙"},strings["greetings.compact_midnight_4"].ifEmpty{"Some nights are for thinking. 🌙"},strings["greetings.compact_midnight_5"].ifEmpty{"The world can wait. 🌙"})
+                                        in 0..5 -> if (userName.isNotEmpty()) arrayOf(
+                                            strings["greetings.compact_late_named_1"].replace(
+                                                "%s",
+                                                userName
+                                            ).ifEmpty { "Still up, $userName? 🌙" },
+                                            strings["greetings.compact_late_named_2"].replace("%s", userName)
+                                                .ifEmpty { "Late night session, $userName? 🌙" },
+                                            strings["greetings.compact_late_named_3"].replace("%s", userName)
+                                                .ifEmpty { "The world is quiet, $userName. 🌙" },
+                                            strings["greetings.compact_late_named_4"].replace("%s", userName)
+                                                .ifEmpty { "Somewhere between today and tomorrow, $userName. 🌙" }) else arrayOf(
+                                            strings["greetings.compact_late_1"].ifEmpty { "Still up? 🌙" },
+                                            strings["greetings.compact_late_2"].ifEmpty { "Late night session? 🌙" },
+                                            strings["greetings.compact_late_3"].ifEmpty { "The world is quiet. 🌙" },
+                                            strings["greetings.compact_late_4"].ifEmpty { "Somewhere between today and tomorrow. 🌙" })
+
+                                        in 6..11 -> if (userName.isNotEmpty()) arrayOf(
+                                            strings["greetings.compact_morning_named_1"].replace(
+                                                "%s",
+                                                userName
+                                            ).ifEmpty { "Good morning, $userName! ☀️" },
+                                            strings["greetings.compact_morning_named_2"].replace("%s", userName)
+                                                .ifEmpty { "Morning, $userName! ☀️" },
+                                            strings["greetings.compact_morning_named_3"].replace("%s", userName)
+                                                .ifEmpty { "Rise and shine, $userName! ☀️" },
+                                            strings["greetings.compact_morning_named_4"].replace("%s", userName)
+                                                .ifEmpty { "A fresh start, $userName. ☀️" },
+                                            strings["greetings.compact_morning_named_5"].replace("%s", userName)
+                                                .ifEmpty { "Up early, $userName? ☀️" }) else arrayOf(
+                                            strings["greetings.compact_morning_1"].ifEmpty { "Good morning! ☀️" },
+                                            strings["greetings.compact_morning_2"].ifEmpty { "Morning! ☀️" },
+                                            strings["greetings.compact_morning_3"].ifEmpty { "Rise and shine! ☀️" },
+                                            strings["greetings.compact_morning_4"].ifEmpty { "A fresh start. ☀️" },
+                                            strings["greetings.compact_morning_5"].ifEmpty { "Up early? ☀️" })
+
+                                        in 12..16 -> if (userName.isNotEmpty()) arrayOf(
+                                            strings["greetings.compact_afternoon_named_1"].replace(
+                                                "%s",
+                                                userName
+                                            ).ifEmpty { "Hey, $userName! 👋" },
+                                            strings["greetings.compact_afternoon_named_2"].replace("%s", userName)
+                                                .ifEmpty { "Good afternoon, $userName! 👋" },
+                                            strings["greetings.compact_afternoon_named_3"].replace("%s", userName)
+                                                .ifEmpty { "Welcome back, $userName. 👋" },
+                                            strings["greetings.compact_afternoon_named_4"].replace("%s", userName)
+                                                .ifEmpty { "There you are, $userName! 👋" },
+                                            strings["greetings.compact_afternoon_named_5"].replace("%s", userName)
+                                                .ifEmpty { "Good to see you, $userName. 👋" }) else arrayOf(
+                                            strings["greetings.compact_afternoon_1"].ifEmpty { "Hey! 👋" },
+                                            strings["greetings.compact_afternoon_2"].ifEmpty { "Good afternoon! 👋" },
+                                            strings["greetings.compact_afternoon_3"].ifEmpty { "Welcome back. 👋" },
+                                            strings["greetings.compact_afternoon_4"].ifEmpty { "There you are! 👋" },
+                                            strings["greetings.compact_afternoon_5"].ifEmpty { "Good to see you. 👋" })
+
+                                        in 17..22 -> if (userName.isNotEmpty()) arrayOf(
+                                            strings["greetings.compact_evening_named_1"].replace(
+                                                "%s",
+                                                userName
+                                            ).ifEmpty { "Good evening, $userName! 🌙" },
+                                            strings["greetings.compact_evening_named_2"].replace("%s", userName)
+                                                .ifEmpty { "Evening, $userName. 🌙" },
+                                            strings["greetings.compact_evening_named_3"].replace("%s", userName)
+                                                .ifEmpty { "Winding down, $userName? 🌙" },
+                                            strings["greetings.compact_evening_named_4"].replace("%s", userName)
+                                                .ifEmpty { "End of the day, $userName. 🌙" },
+                                            strings["greetings.compact_evening_named_5"].replace("%s", userName)
+                                                .ifEmpty { "Hope it was a good one, $userName. 🌙" }) else arrayOf(
+                                            strings["greetings.compact_evening_1"].ifEmpty { "Good evening! 🌙" },
+                                            strings["greetings.compact_evening_2"].ifEmpty { "Evening. 🌙" },
+                                            strings["greetings.compact_evening_3"].ifEmpty { "Winding down? 🌙" },
+                                            strings["greetings.compact_evening_4"].ifEmpty { "End of the day. 🌙" },
+                                            strings["greetings.compact_evening_5"].ifEmpty { "Hope it was a good one. 🌙" })
+
+                                        else -> if (userName.isNotEmpty()) arrayOf(
+                                            strings["greetings.compact_midnight_named_1"].replace(
+                                                "%s",
+                                                userName
+                                            ).ifEmpty { "Still at it, $userName? 🌙" },
+                                            strings["greetings.compact_midnight_named_2"].replace("%s", userName)
+                                                .ifEmpty { "The quiet hours, $userName. 🌙" },
+                                            strings["greetings.compact_midnight_named_3"].replace("%s", userName)
+                                                .ifEmpty { "Almost tomorrow, $userName. 🌙" },
+                                            strings["greetings.compact_midnight_named_4"].replace("%s", userName)
+                                                .ifEmpty { "Some nights are for thinking, $userName. 🌙" },
+                                            strings["greetings.compact_midnight_named_5"].replace("%s", userName)
+                                                .ifEmpty { "The world can wait, $userName. 🌙" }) else arrayOf(
+                                            strings["greetings.compact_midnight_1"].ifEmpty { "Still at it? 🌙" },
+                                            strings["greetings.compact_midnight_2"].ifEmpty { "The quiet hours. 🌙" },
+                                            strings["greetings.compact_midnight_3"].ifEmpty { "Almost tomorrow. 🌙" },
+                                            strings["greetings.compact_midnight_4"].ifEmpty { "Some nights are for thinking. 🌙" },
+                                            strings["greetings.compact_midnight_5"].ifEmpty { "The world can wait. 🌙" })
                                     }
                                     pool.random()
                                 }
-                                AnimatedElement(visible = isVisible, staggerIndex = 0,
-                                    totalItems = 8) {
+                                AnimatedElement(
+                                    visible = isVisible, staggerIndex = 0,
+                                    totalItems = 8
+                                ) {
                                     Text(
                                         text = greeting.withoutGreetingEmoji(),
                                         fontSize = ts.bodyLarge,
@@ -1831,8 +2249,10 @@ fun GamaUI(
                                 }
 
                                 // GAMA Title with bars
-                                AnimatedElement(visible = isVisible, staggerIndex = 1,
-                                    totalItems = 8) {
+                                AnimatedElement(
+                                    visible = isVisible, staggerIndex = 1,
+                                    totalItems = 8
+                                ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically,
@@ -1856,7 +2276,10 @@ fun GamaUI(
                                         val context = LocalContext.current
                                         val quicksandBoldTypeface = remember {
                                             try {
-                                                android.graphics.Typeface.createFromAsset(context.assets, "fonts/quicksand_bold.ttf")
+                                                android.graphics.Typeface.createFromAsset(
+                                                    context.assets,
+                                                    "fonts/quicksand_bold.ttf"
+                                                )
                                             } catch (e: Exception) {
                                                 android.graphics.Typeface.DEFAULT_BOLD
                                             }
@@ -1922,8 +2345,10 @@ fun GamaUI(
                                 }
 
                                 // Standing by text
-                                AnimatedElement(visible = isVisible, staggerIndex = 2,
-                                    totalItems = 8) {
+                                AnimatedElement(
+                                    visible = isVisible, staggerIndex = 2,
+                                    totalItems = 8
+                                ) {
                                     Text(
                                         text = strings["main.standing_by"].ifEmpty { "Standing by and awaiting your command" },
                                         fontSize = ts.bodyLarge,  // Reduced from 18/21
@@ -1935,8 +2360,10 @@ fun GamaUI(
                                 }
 
                                 // What's Next
-                                AnimatedElement(visible = isVisible, staggerIndex = 3,
-                                    totalItems = 8) {
+                                AnimatedElement(
+                                    visible = isVisible, staggerIndex = 3,
+                                    totalItems = 8
+                                ) {
                                     Text(
                                         text = strings["main.whats_next"].ifEmpty { "CHOOSE YOUR PATH." },
                                         fontSize = ts.headlineSmall,
@@ -1949,8 +2376,10 @@ fun GamaUI(
                                 }
 
                                 // Unified frosted glass box: RendererCard + Vulkan | OpenGL + Resources | GPUWatch
-                                AnimatedElement(visible = isVisible, staggerIndex = 4, cardShadow = false,
-                                    totalItems = 8, enabled = shizukuRunning && shizukuPermissionGranted) {
+                                AnimatedElement(
+                                    visible = isVisible, staggerIndex = 4, cardShadow = false,
+                                    totalItems = 8, enabled = shizukuRunning && shizukuPermissionGranted
+                                ) {
                                     val shizukuReady = shizukuRunning && shizukuPermissionGranted
 
                                     // Transparent card — no blur, no frosted backdrop.
@@ -1960,78 +2389,78 @@ fun GamaUI(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(44.dp))
-                                                .drawWithContent {
-                                                    val edgeDepth = 30.dp.toPx()
-                                                    val sideDepth = 24.dp.toPx()
+                                            .drawWithContent {
+                                                val edgeDepth = 30.dp.toPx()
+                                                val sideDepth = 24.dp.toPx()
 
-                                                    // Interior edge glow: cheap gradients drawn inside the parent box,
-                                                    // so the accent outline looks like it spills light inward.
-                                                    drawRect(
-                                                        brush = Brush.verticalGradient(
-                                                            colors = listOf(
-                                                                colors.primaryAccent.copy(alpha = 0.18f),
-                                                                colors.primaryAccent.copy(alpha = 0.08f),
-                                                                Color.Transparent
-                                                            ),
-                                                            startY = 0f,
-                                                            endY = edgeDepth
+                                                // Interior edge glow: cheap gradients drawn inside the parent box,
+                                                // so the accent outline looks like it spills light inward.
+                                                drawRect(
+                                                    brush = Brush.verticalGradient(
+                                                        colors = listOf(
+                                                            colors.primaryAccent.copy(alpha = 0.18f),
+                                                            colors.primaryAccent.copy(alpha = 0.08f),
+                                                            Color.Transparent
                                                         ),
-                                                        topLeft = Offset.Zero,
-                                                        size = Size(size.width, edgeDepth)
-                                                    )
-                                                    drawRect(
-                                                        brush = Brush.verticalGradient(
-                                                            colors = listOf(
-                                                                Color.Transparent,
-                                                                colors.primaryAccent.copy(alpha = 0.08f),
-                                                                colors.primaryAccent.copy(alpha = 0.18f)
-                                                            ),
-                                                            startY = size.height - edgeDepth,
-                                                            endY = size.height
+                                                        startY = 0f,
+                                                        endY = edgeDepth
+                                                    ),
+                                                    topLeft = Offset.Zero,
+                                                    size = Size(size.width, edgeDepth)
+                                                )
+                                                drawRect(
+                                                    brush = Brush.verticalGradient(
+                                                        colors = listOf(
+                                                            Color.Transparent,
+                                                            colors.primaryAccent.copy(alpha = 0.08f),
+                                                            colors.primaryAccent.copy(alpha = 0.18f)
                                                         ),
-                                                        topLeft = Offset(0f, size.height - edgeDepth),
-                                                        size = Size(size.width, edgeDepth)
-                                                    )
-                                                    drawRect(
-                                                        brush = Brush.horizontalGradient(
-                                                            colors = listOf(
-                                                                colors.primaryAccent.copy(alpha = 0.15f),
-                                                                colors.primaryAccent.copy(alpha = 0.06f),
-                                                                Color.Transparent
-                                                            ),
-                                                            startX = 0f,
-                                                            endX = sideDepth
+                                                        startY = size.height - edgeDepth,
+                                                        endY = size.height
+                                                    ),
+                                                    topLeft = Offset(0f, size.height - edgeDepth),
+                                                    size = Size(size.width, edgeDepth)
+                                                )
+                                                drawRect(
+                                                    brush = Brush.horizontalGradient(
+                                                        colors = listOf(
+                                                            colors.primaryAccent.copy(alpha = 0.15f),
+                                                            colors.primaryAccent.copy(alpha = 0.06f),
+                                                            Color.Transparent
                                                         ),
-                                                        topLeft = Offset.Zero,
-                                                        size = Size(sideDepth, size.height)
-                                                    )
-                                                    drawRect(
-                                                        brush = Brush.horizontalGradient(
-                                                            colors = listOf(
-                                                                Color.Transparent,
-                                                                colors.primaryAccent.copy(alpha = 0.06f),
-                                                                colors.primaryAccent.copy(alpha = 0.15f)
-                                                            ),
-                                                            startX = size.width - sideDepth,
-                                                            endX = size.width
+                                                        startX = 0f,
+                                                        endX = sideDepth
+                                                    ),
+                                                    topLeft = Offset.Zero,
+                                                    size = Size(sideDepth, size.height)
+                                                )
+                                                drawRect(
+                                                    brush = Brush.horizontalGradient(
+                                                        colors = listOf(
+                                                            Color.Transparent,
+                                                            colors.primaryAccent.copy(alpha = 0.06f),
+                                                            colors.primaryAccent.copy(alpha = 0.15f)
                                                         ),
-                                                        topLeft = Offset(size.width - sideDepth, 0f),
-                                                        size = Size(sideDepth, size.height)
-                                                    )
+                                                        startX = size.width - sideDepth,
+                                                        endX = size.width
+                                                    ),
+                                                    topLeft = Offset(size.width - sideDepth, 0f),
+                                                    size = Size(sideDepth, size.height)
+                                                )
 
-                                                    drawContent()
+                                                drawContent()
 
-                                                    val outlineWidth = 1.dp.toPx()
-                                                    val inset = outlineWidth / 2f
-                                                    val radius = 44.dp.toPx() - inset
-                                                    drawRoundRect(
-                                                        color = colors.primaryAccent.copy(alpha = 0.44f),
-                                                        topLeft = Offset(inset, inset),
-                                                        size = Size(size.width - outlineWidth, size.height - outlineWidth),
-                                                        cornerRadius = CornerRadius(radius, radius),
-                                                        style = Stroke(width = outlineWidth)
-                                                    )
-                                                }
+                                                val outlineWidth = 1.dp.toPx()
+                                                val inset = outlineWidth / 2f
+                                                val radius = 44.dp.toPx() - inset
+                                                drawRoundRect(
+                                                    color = colors.primaryAccent.copy(alpha = 0.44f),
+                                                    topLeft = Offset(inset, inset),
+                                                    size = Size(size.width - outlineWidth, size.height - outlineWidth),
+                                                    cornerRadius = CornerRadius(radius, radius),
+                                                    style = Stroke(width = outlineWidth)
+                                                )
+                                            }
                                     ) {
                                         // Accent tint + border, fully opaque, on top of transparent bg
 
@@ -2083,7 +2512,8 @@ fun GamaUI(
                                                     onClick = {
                                                         performRendererHaptic()
                                                         if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                            shizukuHelpType = if (!shizukuRunning) "not_running" else "permission"
+                                                            shizukuHelpType =
+                                                                if (!shizukuRunning) "not_running" else "permission"
                                                             openMainPanelExclusive { showShizukuHelp = true }
                                                             return@BigRendererButton
                                                         }
@@ -2100,7 +2530,8 @@ fun GamaUI(
                                                                 if (verboseMode) { output -> verboseOutput += output } else null
                                                             )
                                                         }
-                                                        successDialogMessage = strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
+                                                        successDialogMessage =
+                                                            strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
                                                     modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -2116,7 +2547,8 @@ fun GamaUI(
                                                     onClick = {
                                                         performRendererHaptic()
                                                         if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                            shizukuHelpType = if (!shizukuRunning) "not_running" else "permission"
+                                                            shizukuHelpType =
+                                                                if (!shizukuRunning) "not_running" else "permission"
                                                             openMainPanelExclusive { showShizukuHelp = true }
                                                             return@BigRendererButton
                                                         }
@@ -2133,7 +2565,8 @@ fun GamaUI(
                                                                 if (verboseMode) { output -> verboseOutput += output } else null
                                                             )
                                                         }
-                                                        successDialogMessage = strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
+                                                        successDialogMessage =
+                                                            strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
                                                     modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -2164,13 +2597,21 @@ fun GamaUI(
                                                         openMainPanelExclusive { showResourcesPanel = true }
                                                     },
                                                     modifier = if (showGpuWatchButton) Modifier.weight(1f) else Modifier.fillMaxWidth(),
-                                                    accent = false, enabled = true,
-                                                    colors = colors, oledMode = effectiveOledMode, iconType = "resources"
+                                                    accent = false,
+                                                    enabled = true,
+                                                    colors = colors,
+                                                    oledMode = effectiveOledMode,
+                                                    iconType = "resources"
                                                 )
                                                 AnimatedVisibility(
                                                     modifier = Modifier.weight(1f),
                                                     visible = showGpuWatchButton,
-                                                    enter = fadeIn(animationSpec = tween(220, easing = MotionTokens.Easing.enter)) +
+                                                    enter = fadeIn(
+                                                        animationSpec = tween(
+                                                            220,
+                                                            easing = MotionTokens.Easing.enter
+                                                        )
+                                                    ) +
                                                             expandHorizontally(
                                                                 animationSpec = spring(
                                                                     dampingRatio = MotionTokens.Springs.smooth.dampingRatio,
@@ -2185,14 +2626,25 @@ fun GamaUI(
                                                                     stiffness = MotionTokens.Springs.gentle.stiffness
                                                                 )
                                                             ),
-                                                    exit = fadeOut(animationSpec = tween(160, easing = MotionTokens.Easing.exit)) +
+                                                    exit = fadeOut(
+                                                        animationSpec = tween(
+                                                            160,
+                                                            easing = MotionTokens.Easing.exit
+                                                        )
+                                                    ) +
                                                             shrinkHorizontally(
-                                                                animationSpec = tween(180, easing = MotionTokens.Easing.exit),
+                                                                animationSpec = tween(
+                                                                    180,
+                                                                    easing = MotionTokens.Easing.exit
+                                                                ),
                                                                 shrinkTowards = Alignment.Start
                                                             ) +
                                                             scaleOut(
                                                                 targetScale = 0.88f,
-                                                                animationSpec = tween(160, easing = MotionTokens.Easing.exit)
+                                                                animationSpec = tween(
+                                                                    160,
+                                                                    easing = MotionTokens.Easing.exit
+                                                                )
                                                             )
                                                 ) {
                                                     IllustratedButton(
@@ -2202,8 +2654,11 @@ fun GamaUI(
                                                             openMainPanelExclusive { showGPUWatchConfirm = true }
                                                         },
                                                         modifier = Modifier.fillMaxWidth(),
-                                                        accent = false, enabled = true,
-                                                        colors = colors, oledMode = effectiveOledMode, iconType = "gpuwatch"
+                                                        accent = false,
+                                                        enabled = true,
+                                                        colors = colors,
+                                                        oledMode = effectiveOledMode,
+                                                        iconType = "gpuwatch"
                                                     )
                                                 }
                                             }
@@ -2283,16 +2738,16 @@ fun GamaUI(
                     // while the color eases to the new ACCENT COLOR. Keying this block by
                     // color disposes/recreates the overlay, which makes the rain respawn.
                     MatrixRainOverlay(
-                        enabled          = particlesEnabled,
-                        headColor        = targetMatrixHeadColor,
-                        rainColor        = targetMatrixRainColor,
-                        trailColor       = targetMatrixTrailColor,
-                        backgroundColor  = Color.Black,
-                        backgroundAlpha  = matrixBgAlpha,
-                        speedLevel       = matrixSpeed,
-                        densityLevel     = matrixDensity,
-                        fontSizeLevel    = matrixFontSize,
-                        fadeLength       = matrixFadeLength
+                        enabled = particlesEnabled,
+                        headColor = targetMatrixHeadColor,
+                        rainColor = targetMatrixRainColor,
+                        trailColor = targetMatrixTrailColor,
+                        backgroundColor = Color.Black,
+                        backgroundAlpha = matrixBgAlpha,
+                        speedLevel = matrixSpeed,
+                        densityLevel = matrixDensity,
+                        fontSizeLevel = matrixFontSize,
+                        fadeLength = matrixFadeLength
                     )
                 }
 
@@ -2301,19 +2756,19 @@ fun GamaUI(
                 // which cancels their LaunchedEffect loops, sensor listeners, and frame clocks.
                 // Coming back reloads them cleanly, which is cheaper than burning battery hidden.
                 ParticlesOverlay(
-                    enabled          = particlesEnabled && !matrixMode,
-                    color            = effectsAccent,
-                    particleSpeed    = particleSpeed,
-                    parallaxEnabled  = particleParallaxEnabled,
-                    particleCount    = particleCount,
+                    enabled = particlesEnabled && !matrixMode,
+                    color = effectsAccent,
+                    particleSpeed = particleSpeed,
+                    parallaxEnabled = particleParallaxEnabled,
+                    particleCount = particleCount,
                     particleCountCustom = particleCountCustom.toIntOrNull() ?: 150,
                     parallaxSensitivity = animatedParallaxSensitivity,
-                    starMode         = false,
-                    timeModeEnabled  = particleTimeMode,
-                    timeOffsetHours  = timeOffsetHours,
-                    anyPanelOpen     = anyPanelOpen,
-                    isLandscape      = isLandscape,
-                    nativeRefreshRate  = particleNativeRefreshRate,
+                    starMode = false,
+                    timeModeEnabled = particleTimeMode,
+                    timeOffsetHours = timeOffsetHours,
+                    anyPanelOpen = anyPanelOpen,
+                    isLandscape = isLandscape,
+                    nativeRefreshRate = particleNativeRefreshRate,
                     quarterRefreshRate = particleQuarterRefreshRate,
                     celestialDarkMode = effectiveOledMode
                 )
@@ -2503,7 +2958,7 @@ fun GamaUI(
                 onInfoRequested = { title, body ->
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     integrationInfoTitle = title
-                    integrationInfoBody  = body
+                    integrationInfoBody = body
                     showIntegrationInfoDialog = true
                 },
                 isSmallScreen = isSmallScreen,
@@ -2747,7 +3202,8 @@ fun GamaUI(
                     .fillMaxSize()
                     .then(
                         if (showAggressiveWarning && animationLevel != 2 &&
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        )
                             Modifier.blur(20.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         else Modifier
                     )
@@ -2800,7 +3256,8 @@ fun GamaUI(
                                     ShizukuHelper.runCommand("dumpsys deviceidle unforce")
                                     ShizukuHelper.runCommand("dumpsys battery reset")
                                 }
-                            } catch (_: Exception) {}
+                            } catch (_: Exception) {
+                            }
                         }
                         savePreferences()
                     },
@@ -2933,12 +3390,19 @@ fun GamaUI(
                 },
                 onExport = {
                     scope.launch {
-                        val json = try { BackupHelper.export(prefs) } catch (e: Exception) {
-                            android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        val json = try {
+                            BackupHelper.export(prefs)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Export failed: ${e.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
                             return@launch
                         }
                         onExportBackup(json, BackupHelper.buildFileName())
-                        android.widget.Toast.makeText(context, "Backup saved ✅", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, "Backup saved ✅", android.widget.Toast.LENGTH_SHORT)
+                            .show()
                     }
                 },
                 onImport = {
@@ -2947,49 +3411,54 @@ fun GamaUI(
                             try {
                                 val msg = BackupHelper.import(prefs, json)
                                 // Reload all prefs-backed state from updated SharedPreferences
-                                animationLevel       = prefs.getInt("animation_level", 0)
-                                gradientEnabled      = prefs.getBoolean("gradient_enabled", true)
-                                blurEnabled          = prefs.getBoolean("blur_enabled", true)
-                                particlesEnabled     = prefs.getBoolean("particles_enabled", true)
-                                particleSpeed        = prefs.getInt("particle_speed", 1)
+                                animationLevel = prefs.getInt("animation_level", 0)
+                                animationSpeed = prefs.getInt("animation_speed", 1)
+                                gradientEnabled = prefs.getBoolean("gradient_enabled", true)
+                                blurEnabled = prefs.getBoolean("blur_enabled", true)
+                                particlesEnabled = prefs.getBoolean("particles_enabled", true)
+                                particleSpeed = prefs.getInt("particle_speed", 1)
                                 particleParallaxEnabled = prefs.getBoolean("particle_parallax_enabled", true)
                                 particleParallaxSensitivity = prefs.getInt("particle_parallax_sensitivity", 0)
-                                particleStarMode     = prefs.getBoolean("particle_star_mode", false)
-                                particleTimeMode     = prefs.getBoolean("particle_time_mode", true)
-                                timeOffsetHours      = prefs.getFloat("time_offset_hours", 0f)
-                                particleCount        = prefs.getInt("particle_count", 0)
-                                particleCountCustom  = prefs.getInt("particle_count_custom", 150).toString()
-                                themePreference      = prefs.getInt("theme_preference", 0)
-                                uiScale              = prefs.getInt("ui_scale", 1)
-                                verboseMode          = prefs.getBoolean("verbose_mode", false)
-                                aggressiveMode       = prefs.getBoolean("aggressive_mode", false)
-                                killLauncher         = prefs.getBoolean("kill_launcher", false)
-                                staggerEnabled       = prefs.getBoolean("stagger_enabled", true)
+                                particleStarMode = prefs.getBoolean("particle_star_mode", false)
+                                particleTimeMode = prefs.getBoolean("particle_time_mode", true)
+                                timeOffsetHours = prefs.getFloat("time_offset_hours", 0f)
+                                particleCount = prefs.getInt("particle_count", 0)
+                                particleCountCustom = prefs.getInt("particle_count_custom", 150).toString()
+                                themePreference = prefs.getInt("theme_preference", 0)
+                                uiScale = prefs.getInt("ui_scale", 1)
+                                verboseMode = prefs.getBoolean("verbose_mode", false)
+                                aggressiveMode = prefs.getBoolean("aggressive_mode", false)
+                                killLauncher = prefs.getBoolean("kill_launcher", false)
+                                staggerEnabled = prefs.getBoolean("stagger_enabled", true)
                                 backButtonAvoidanceEnabled = prefs.getBoolean("back_button_avoidance_enabled", true)
-                                particleNativeRefreshRate  = prefs.getBoolean("particle_native_refresh_rate", false)
+                                particleNativeRefreshRate = prefs.getBoolean("particle_native_refresh_rate", false)
                                 particleQuarterRefreshRate = prefs.getBoolean("particle_quarter_refresh_rate", false)
-                                matrixMode       = prefs.getBoolean("matrix_mode", true)
-                                matrixSpeed      = prefs.getInt("matrix_speed", 1)
-                                matrixDensity    = prefs.getInt("matrix_density", 1)
-                                matrixFontSize   = prefs.getInt("matrix_font_size", 1)
+                                matrixMode = prefs.getBoolean("matrix_mode", true)
+                                matrixSpeed = prefs.getInt("matrix_speed", 1)
+                                matrixDensity = prefs.getInt("matrix_density", 1)
+                                matrixFontSize = prefs.getInt("matrix_font_size", 1)
                                 matrixFadeLength = prefs.getInt("matrix_fade_length", 1)
-                                matrixBgAlpha    = prefs.getFloat("matrix_bg_alpha", 0f)
-                                oledMode             = prefs.getBoolean("oled_mode", false)
-                                oledAccentColor      = Color(prefs.getInt("oled_accent_color", 0xFF4895EF.toInt()))
-                                useDynamicColorOLED  = prefs.getBoolean("use_dynamic_color_oled", false)
-                                useDynamicColor      = prefs.getBoolean("use_dynamic_color", true)
-                                customAccentColor    = Color(prefs.getInt("custom_accent", 0xFF4895EF.toInt()))
-                                customGradientStart  = Color(prefs.getInt("custom_gradient_start", 0xFF0A2540.toInt()))
-                                customGradientEnd    = Color(prefs.getInt("custom_gradient_end", 0xFF000000.toInt()))
+                                matrixBgAlpha = prefs.getFloat("matrix_bg_alpha", 0f)
+                                oledMode = prefs.getBoolean("oled_mode", false)
+                                oledAccentColor = Color(prefs.getInt("oled_accent_color", 0xFF4895EF.toInt()))
+                                useDynamicColorOLED = prefs.getBoolean("use_dynamic_color_oled", false)
+                                useDynamicColor = prefs.getBoolean("use_dynamic_color", true)
+                                customAccentColor = Color(prefs.getInt("custom_accent", 0xFF4895EF.toInt()))
+                                customGradientStart = Color(prefs.getInt("custom_gradient_start", 0xFF0A2540.toInt()))
+                                customGradientEnd = Color(prefs.getInt("custom_gradient_end", 0xFF000000.toInt()))
                                 dismissOnClickOutside = prefs.getBoolean("dismiss_on_click_outside", true)
                                 notificationsEnabled = prefs.getBoolean("notif_enabled", false)
-                                notifIntervalIndex   = prefs.getInt("notif_interval_idx", 2)
-                                userName             = prefs.getString("user_name", "") ?: ""
+                                notifIntervalIndex = prefs.getInt("notif_interval_idx", 2)
+                                userName = prefs.getString("user_name", "") ?: ""
                                 excludedAppsList.clear()
                                 excludedAppsList.addAll(prefs.getStringSet("excluded_apps", emptySet()) ?: emptySet())
                                 android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
                             } catch (e: Exception) {
-                                android.widget.Toast.makeText(context, "Import failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Import failed: ${e.message}",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     }
@@ -3072,9 +3541,17 @@ fun GamaUI(
                         // Send test notification
                         val success = ShizukuHelper.sendTestNotification(context, userName)
                         if (success) {
-                            android.widget.Toast.makeText(context, "Test notification sent!", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(
+                                context,
+                                "Test notification sent!",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         } else {
-                            android.widget.Toast.makeText(context, "Failed to send notification", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(
+                                context,
+                                "Failed to send notification",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
                 },
@@ -3092,7 +3569,8 @@ fun GamaUI(
                             ).show()
                         }
                     )
-                    android.widget.Toast.makeText(context, "Boot notification sent!", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, "Boot notification sent!", android.widget.Toast.LENGTH_SHORT)
+                        .show()
                 },
                 userName = userName,
                 isSmallScreen = isSmallScreen,
@@ -3229,12 +3707,12 @@ fun GamaUI(
                     showMatrixSettings = true
                 },
                 isSmallScreen = isSmallScreen,
-                isLandscape   = isLandscape,
-                isTablet      = isTablet,
-                colors        = colors,
+                isLandscape = isLandscape,
+                isTablet = isTablet,
+                colors = colors,
                 cardBackground = cardBackground,
                 performHaptic = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
-                oledMode      = effectiveOledMode
+                oledMode = effectiveOledMode
             )
 
             // ── Particles Settings sub-panel ──────────────────────────────────
@@ -3261,11 +3739,11 @@ fun GamaUI(
                     showParticlesPerformance = true
                 },
                 isSmallScreen = isSmallScreen,
-                isLandscape   = isLandscape,
-                colors        = colors,
+                isLandscape = isLandscape,
+                colors = colors,
                 cardBackground = cardBackground,
                 performHaptic = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
-                oledMode      = effectiveOledMode
+                oledMode = effectiveOledMode
             )
 
             // ── Particles › Appearance sub-panel ─────────────────────────────
@@ -3362,12 +3840,12 @@ fun GamaUI(
 
             // ── Matrix rain settings panel ────────────────────────────────────
             MatrixSettingsPanel(
-                visible           = showMatrixSettings && !showMatrixAppearance && !showMatrixMotion,
+                visible = showMatrixSettings && !showMatrixAppearance && !showMatrixMotion,
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showMatrixSettings = false
                 },
-                particlesEnabled  = particlesEnabled,
+                particlesEnabled = particlesEnabled,
                 onAppearanceClick = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showMatrixAppearance = true
@@ -3376,50 +3854,50 @@ fun GamaUI(
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showMatrixMotion = true
                 },
-                isSmallScreen     = isSmallScreen,
-                isLandscape       = isLandscape,
-                colors            = colors,
-                cardBackground    = cardBackground,
-                performHaptic     = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
-                oledMode          = effectiveOledMode
+                isSmallScreen = isSmallScreen,
+                isLandscape = isLandscape,
+                colors = colors,
+                cardBackground = cardBackground,
+                performHaptic = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
+                oledMode = effectiveOledMode
             )
 
             MatrixAppearancePanel(
-                visible                    = showMatrixAppearance,
+                visible = showMatrixAppearance,
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showMatrixAppearance = false
                 },
-                particlesEnabled              = particlesEnabled,
-                matrixFontSize                = matrixFontSize,
-                onMatrixFontSizeChange        = { matrixFontSize = it; savePreferences() },
-                isSmallScreen                 = isSmallScreen,
-                isLandscape                   = isLandscape,
-                colors                        = colors,
-                cardBackground                = cardBackground,
-                performHaptic                 = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
-                oledMode                      = effectiveOledMode
+                particlesEnabled = particlesEnabled,
+                matrixFontSize = matrixFontSize,
+                onMatrixFontSizeChange = { matrixFontSize = it; savePreferences() },
+                isSmallScreen = isSmallScreen,
+                isLandscape = isLandscape,
+                colors = colors,
+                cardBackground = cardBackground,
+                performHaptic = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
+                oledMode = effectiveOledMode
             )
 
             MatrixMotionPanel(
-                visible                  = showMatrixMotion,
+                visible = showMatrixMotion,
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showMatrixMotion = false
                 },
-                particlesEnabled         = particlesEnabled,
-                matrixSpeed              = matrixSpeed,
-                onMatrixSpeedChange      = { matrixSpeed = it;      savePreferences() },
-                matrixDensity            = matrixDensity,
-                onMatrixDensityChange    = { matrixDensity = it;    savePreferences() },
-                matrixFadeLength         = matrixFadeLength,
+                particlesEnabled = particlesEnabled,
+                matrixSpeed = matrixSpeed,
+                onMatrixSpeedChange = { matrixSpeed = it; savePreferences() },
+                matrixDensity = matrixDensity,
+                onMatrixDensityChange = { matrixDensity = it; savePreferences() },
+                matrixFadeLength = matrixFadeLength,
                 onMatrixFadeLengthChange = { matrixFadeLength = it; savePreferences() },
-                isSmallScreen            = isSmallScreen,
-                isLandscape              = isLandscape,
-                colors                   = colors,
-                cardBackground           = cardBackground,
-                performHaptic            = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
-                oledMode                 = effectiveOledMode
+                isSmallScreen = isSmallScreen,
+                isLandscape = isLandscape,
+                colors = colors,
+                cardBackground = cardBackground,
+                performHaptic = { performHaptic(HapticFeedbackConstants.CLOCK_TICK) },
+                oledMode = effectiveOledMode
             )
 
 
@@ -3462,7 +3940,7 @@ fun GamaUI(
                 cardBackground = cardBackground
             )
 
-VerbosePanel(
+            VerbosePanel(
                 visible = showVerbosePanel,
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
@@ -3514,7 +3992,10 @@ VerbosePanel(
                     showGPUWatchConfirm = false
                     try {
                         val intent = Intent("com.android.settings.SHOW_REGULATORY_INFO")
-                        intent.setClassName("com.android.settings", "com.android.settings.Settings\$TestingSettingsActivity")
+                        intent.setClassName(
+                            "com.android.settings",
+                            "com.android.settings.Settings\$TestingSettingsActivity"
+                        )
                         context.startActivity(intent)
                     } catch (e: Exception) {
                         try {
@@ -3568,7 +4049,8 @@ VerbosePanel(
                         .alpha(controlsAlpha)
                 ) {
                     // Version number
-                    AnimatedElement(visible = controlsVisible, staggerIndex = 4,
+                    AnimatedElement(
+                        visible = controlsVisible, staggerIndex = 4,
                         totalItems = 8,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -3588,7 +4070,8 @@ VerbosePanel(
 
                     // Settings button (bottom-end). This is the source-of-truth anchor.
                     // Panel back/search/global buttons mirror this exact resting position.
-                    AnimatedElement(visible = controlsVisible, staggerIndex = 4,
+                    AnimatedElement(
+                        visible = controlsVisible, staggerIndex = 4,
                         totalItems = 8,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -3613,13 +4096,13 @@ VerbosePanel(
                         val settingsPressProgress = remember { Animatable(0f) }
                         LaunchedEffect(settingsPressed, animationLevel) {
                             settingsPressProgress.animateTo(
-                                targetValue   = if (settingsPressed) 1f else 0f,
+                                targetValue = if (settingsPressed) 1f else 0f,
                                 animationSpec = when (animationLevel) {
                                     2 -> snap()
                                     1 -> tween(durationMillis = 120, easing = MotionTokens.Easing.emphasized)
                                     else -> spring(
                                         dampingRatio = if (settingsPressed) MotionTokens.Springs.pressDown.dampingRatio else MotionTokens.Springs.pressUp.dampingRatio,
-                                        stiffness    = if (settingsPressed) MotionTokens.Springs.pressDown.stiffness    else MotionTokens.Springs.pressUp.stiffness
+                                        stiffness = if (settingsPressed) MotionTokens.Springs.pressDown.stiffness else MotionTokens.Springs.pressUp.stiffness
                                     )
                                 }
                             )
@@ -3637,7 +4120,7 @@ VerbosePanel(
                             },
                             label = "settings_appear_scale"
                         )
-                        val settingsPressScale  = (1f - spp * (1f - MotionTokens.Scale.subtle)) * settingsAppearScale
+                        val settingsPressScale = (1f - spp * (1f - MotionTokens.Scale.subtle)) * settingsAppearScale
                         val settingsBorderAlpha = 0.4f + spp * 0.6f
                         val settingsBorderWidth = (1.5f + spp * 0.5f).dp
                         val glowSize = btnSize * 1.8f
@@ -3699,7 +4182,11 @@ VerbosePanel(
                                             strokeWidth = settingsBorderWidth,
                                             glowRadius = 10.dp
                                         )
-                                        .border(settingsBorderWidth, colors.primaryAccent.copy(alpha = settingsBorderAlpha), RoundedCornerShape(28.dp))
+                                        .border(
+                                            settingsBorderWidth,
+                                            colors.primaryAccent.copy(alpha = settingsBorderAlpha),
+                                            RoundedCornerShape(28.dp)
+                                        )
                                         .semantics { contentDescription = "Open Settings" }
                                         .then(
                                             if (controlsVisible) Modifier.pointerInput(controlsVisible) {
@@ -3709,7 +4196,12 @@ VerbosePanel(
                                                         settingsPressed = true
                                                         val released = tryAwaitRelease()
                                                         settingsPressed = false
-                                                        GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, released)
+                                                        GamaHaptics.releaseAfterPress(
+                                                            context,
+                                                            view,
+                                                            hapticStartedAt,
+                                                            released
+                                                        )
                                                         if (released) {
                                                             openMainPanelExclusive { showSettings = true }
                                                         }
@@ -3733,27 +4225,39 @@ VerbosePanel(
                                     }
                                 }
                             }
-                        // One-time label
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = showButtonLabels,
-                            enter = fadeIn(animationSpec = tween(260, easing = MotionTokens.Easing.enter)) +
-                                    slideInVertically(animationSpec = tween(260, easing = MotionTokens.Easing.emphasizedDecelerate)) { it / 3 },
-                            exit  = fadeOut(animationSpec = tween(180, easing = MotionTokens.Easing.exit)) +
-                                    slideOutVertically(animationSpec = tween(180, easing = MotionTokens.Easing.exit)) { it / 4 }
-                        ) {
-                            Text(
-                                text = strings["settings.title"].replace("S", "S").let { it.ifEmpty { "Settings" }.lowercase().replaceFirstChar { c -> c.uppercase() } },
-                                fontSize = ts.labelSmall,
-                                fontFamily = quicksandFontFamily,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primaryAccent.copy(alpha = 0.7f),
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+                            // One-time label
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showButtonLabels,
+                                enter = fadeIn(animationSpec = tween(260, easing = MotionTokens.Easing.enter)) +
+                                        slideInVertically(
+                                            animationSpec = tween(
+                                                260,
+                                                easing = MotionTokens.Easing.emphasizedDecelerate
+                                            )
+                                        ) { it / 3 },
+                                exit = fadeOut(animationSpec = tween(180, easing = MotionTokens.Easing.exit)) +
+                                        slideOutVertically(
+                                            animationSpec = tween(
+                                                180,
+                                                easing = MotionTokens.Easing.exit
+                                            )
+                                        ) { it / 4 }
+                            ) {
+                                Text(
+                                    text = strings["settings.title"].replace("S", "S").let {
+                                        it.ifEmpty { "Settings" }.lowercase().replaceFirstChar { c -> c.uppercase() }
+                                    },
+                                    fontSize = ts.labelSmall,
+                                    fontFamily = quicksandFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.primaryAccent.copy(alpha = 0.7f),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 }

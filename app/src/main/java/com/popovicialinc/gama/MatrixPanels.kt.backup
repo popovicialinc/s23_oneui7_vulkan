@@ -1,0 +1,452 @@
+package com.popovicialinc.gama
+
+
+import android.content.Context
+import android.os.Build
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+
+@Composable
+fun MatrixSettingsPanel(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    particlesEnabled: Boolean,
+    onAppearanceClick: () -> Unit,
+    onMotionClick: () -> Unit,
+    isSmallScreen: Boolean,
+    isLandscape: Boolean,
+    colors: ThemeColors,
+    cardBackground: Color,
+    performHaptic: () -> Unit,
+    oledMode: Boolean
+) {
+    val ts = LocalTypeScale.current
+    PanelScaffold(
+        visible = visible, onDismiss = onDismiss,
+        isLandscape = isLandscape, isSmallScreen = isSmallScreen,
+        oledMode = oledMode, colors = colors
+    ) { _ ->
+        CleanTitle(
+            text = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX\nSETTINGS" },
+            fontSize = if (isLandscape) ts.displaySmall else ts.displayMedium,
+            colors = colors
+        )
+
+        val navAlpha by animateFloatAsState(
+            targetValue = if (particlesEnabled) 1f else 0.38f,
+            animationSpec = tween(280, easing = MotionTokens.Easing.silk),
+            label = "ms_nav_alpha"
+        )
+
+        AnimatedElement(
+            visible = visible,
+            cardShadow = true,
+            staggerIndex = 1,
+            totalItems = 2,
+            enabled = particlesEnabled
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                SettingsNavigationCard(
+                    title = LocalStrings.current["particles.appearance_title"].ifEmpty { "GLYPH SETTINGS" },
+                    description = LocalStrings.current["matrix.appearance_desc"].ifEmpty {
+                        "Glyph font size and background opacity"
+                    },
+                    onClick = {
+                        if (particlesEnabled) {
+                            performHaptic(); onAppearanceClick()
+                        }
+                    },
+                    isSmallScreen = isSmallScreen, colors = colors,
+                    cardBackground = cardBackground, oledMode = oledMode,
+                    enabled = particlesEnabled
+                )
+            }
+        }
+        AnimatedElement(
+            visible = visible,
+            cardShadow = true,
+            staggerIndex = 2,
+            totalItems = 2,
+            enabled = particlesEnabled
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                SettingsNavigationCard(
+                    title = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
+                    description = LocalStrings.current["matrix.motion_desc"].ifEmpty {
+                        "Fall speed, column density, and trail fade length"
+                    },
+                    onClick = {
+                        if (particlesEnabled) {
+                            performHaptic(); onMotionClick()
+                        }
+                    },
+                    isSmallScreen = isSmallScreen, colors = colors,
+                    cardBackground = cardBackground, oledMode = oledMode,
+                    enabled = particlesEnabled
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MatrixAppearancePanel(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    particlesEnabled: Boolean,
+    matrixFontSize: Int,
+    onMatrixFontSizeChange: (Int) -> Unit,
+    isSmallScreen: Boolean,
+    isLandscape: Boolean,
+    colors: ThemeColors,
+    cardBackground: Color,
+    performHaptic: () -> Unit,
+    oledMode: Boolean
+) {
+    val ts = LocalTypeScale.current
+    val enabled = particlesEnabled
+
+    PanelScaffold(
+        visible = visible, onDismiss = onDismiss,
+        isLandscape = isLandscape, isSmallScreen = isSmallScreen,
+        oledMode = oledMode, colors = colors
+    ) { _ ->
+        CleanTitle(
+            text = LocalStrings.current["particles.appearance_title"].ifEmpty { "GLYPH\nSETTINGS" },
+            fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
+            colors = colors
+        )
+
+        // ── Glyph size ────────────────────────────────────────────────────────
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 1, enabled = enabled) {
+            ) {
+            val alpha by animateFloatAsState(
+                if (enabled) 1f else 0.32f,
+                tween(260, easing = MotionTokens.Easing.velvet),
+                label = "ma_font_a"
+            )
+            val scale by animateFloatAsState(
+                if (enabled) 1f else 0.88f,
+                spring(
+                    dampingRatio = 0.58f,
+                    stiffness = MotionTokens.SpeedUtil.stiffness(430f, LocalAnimationSpeed.current)
+                ),
+                label = "ma_font_scale"
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = alpha, scaleX = scale, scaleY = scale)
+                    .then(
+                        if (enabled) Modifier.border(
+                            width = 1.dp,
+                            color = colors.primaryAccent.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(28.dp)
+                        ) else Modifier
+                    )
+            ) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .graphicsLayer { shape = RoundedCornerShape(28.dp); clip = false },
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            LocalStrings.current["matrix.font_size"].ifEmpty { "GLYPH SIZE" },
+                            fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp, fontFamily = quicksandFontFamily,
+                            color = colors.primaryAccent.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            LocalStrings.current["matrix.font_size_desc"].ifEmpty { "Small (11 sp) · Medium (15 sp) · Large (20 sp)" },
+                            fontSize = ts.bodySmall, color = colors.textSecondary,
+                            fontFamily = quicksandFontFamily, fontWeight = FontWeight.Bold
+                        )
+                        GlideOptionSelector(
+                            options = listOf(
+                                tr("text_catalog.small", "Small"),
+                                tr("particles.sensitivity_medium", "Medium"),
+                                tr("text_catalog.large", "Large")
+                            ),
+                            selectedIndex = matrixFontSize.coerceIn(0, 2),
+                            onOptionSelected = { performHaptic(); onMatrixFontSizeChange(it) },
+                            colors = colors, modifier = Modifier.fillMaxWidth(), enabled = enabled
+                        )
+                    }
+                }
+            }
+        }
+        }
+    }
+}
+
+@Composable
+fun MatrixMotionPanel(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    particlesEnabled: Boolean,
+    matrixSpeed: Int,
+    onMatrixSpeedChange: (Int) -> Unit,
+    matrixDensity: Int,
+    onMatrixDensityChange: (Int) -> Unit,
+    matrixFadeLength: Int,
+    onMatrixFadeLengthChange: (Int) -> Unit,
+    isSmallScreen: Boolean,
+    isLandscape: Boolean,
+    colors: ThemeColors,
+    cardBackground: Color,
+    performHaptic: () -> Unit,
+    oledMode: Boolean
+) {
+    val ts = LocalTypeScale.current
+    val enabled = particlesEnabled
+
+    PanelScaffold(
+        visible = visible, onDismiss = onDismiss,
+        isLandscape = isLandscape, isSmallScreen = isSmallScreen,
+        oledMode = oledMode, colors = colors
+    ) { _ ->
+        CleanTitle(
+            text = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
+            fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
+            colors = colors
+        )
+
+        // ── Speed ─────────────────────────────────────────────────────────────
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = enabled) {
+            Box(
+                modifier = Modifier.fillMaxWidth().graphicsLayer(
+                    alpha = if (enabled) 1f else 0.32f,
+                    scaleX = if (enabled) 1f else 0.88f,
+                    scaleY = if (enabled) 1f else 0.88f
+                )
+                    .then(
+                        if (enabled) Modifier.border(
+                            width = 1.dp,
+                            color = colors.primaryAccent.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(28.dp)
+                        ) else Modifier
+                    )
+            ) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .graphicsLayer { shape = RoundedCornerShape(28.dp); clip = false },
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            LocalStrings.current["particles.speed"].ifEmpty { "SPEED" },
+                            fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp, fontFamily = quicksandFontFamily,
+                            color = colors.primaryAccent.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            LocalStrings.current["matrix.speed_desc"].ifEmpty { "How fast characters fall down the screen" },
+                            fontSize = ts.bodySmall, color = colors.textSecondary,
+                            fontFamily = quicksandFontFamily, fontWeight = FontWeight.Bold
+                        )
+                        GlideOptionSelector(
+                            options = listOf(
+                                tr("particles.speed_slow", "Slow"),
+                                tr("particles.speed_medium", "Medium"),
+                                tr("particles.speed_fast", "Fast")
+                            ),
+                            selectedIndex = matrixSpeed.coerceIn(0, 2),
+                            onOptionSelected = { performHaptic(); onMatrixSpeedChange(it) },
+                            colors = colors, modifier = Modifier.fillMaxWidth(), enabled = enabled
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Density ───────────────────────────────────────────────────────────
+        AnimatedElement(
+            visible = visible,
+            cardShadow = true,
+            staggerIndex = 2,
+            totalItems = 4,
+            enabled = enabled
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth().graphicsLayer(
+                    alpha = if (enabled) 1f else 0.32f,
+                    scaleX = if (enabled) 1f else 0.88f,
+                    scaleY = if (enabled) 1f else 0.88f
+                )
+                    .then(
+                        if (enabled) Modifier.border(
+                            width = 1.dp,
+                            color = colors.primaryAccent.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(28.dp)
+                        ) else Modifier
+                    )
+            ) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .graphicsLayer { shape = RoundedCornerShape(28.dp); clip = false },
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            LocalStrings.current["matrix.density"].ifEmpty { "DENSITY" },
+                            fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp, fontFamily = quicksandFontFamily,
+                            color = colors.primaryAccent.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            LocalStrings.current["matrix.density_desc"].ifEmpty { "How many columns of glyphs appear across the screen" },
+                            fontSize = ts.bodySmall, color = colors.textSecondary,
+                            fontFamily = quicksandFontFamily, fontWeight = FontWeight.Bold
+                        )
+                        GlideOptionSelector(
+                            options = listOf(
+                                tr("text_catalog.sparse", "Sparse"),
+                                tr("particles.sensitivity_medium", "Medium"),
+                                tr("text_catalog.dense", "Dense")
+                            ),
+                            selectedIndex = matrixDensity.coerceIn(0, 2),
+                            onOptionSelected = { performHaptic(); onMatrixDensityChange(it) },
+                            colors = colors, modifier = Modifier.fillMaxWidth(), enabled = enabled
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Trail length ──────────────────────────────────────────────────────
+        AnimatedElement(
+            visible = visible,
+            cardShadow = true,
+            staggerIndex = 3,
+            totalItems = 4,
+            enabled = enabled
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth().graphicsLayer(
+                    alpha = if (enabled) 1f else 0.32f,
+                    scaleX = if (enabled) 1f else 0.88f,
+                    scaleY = if (enabled) 1f else 0.88f
+                )
+                    .then(
+                        if (enabled) Modifier.border(
+                            width = 1.dp,
+                            color = colors.primaryAccent.copy(alpha = 0.55f),
+                            shape = RoundedCornerShape(28.dp)
+                        ) else Modifier
+                    )
+            ) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                }
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                        .graphicsLayer { shape = RoundedCornerShape(28.dp); clip = false },
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            LocalStrings.current["matrix.trail_length"].ifEmpty { "TRAIL LENGTH" },
+                            fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp, fontFamily = quicksandFontFamily,
+                            color = colors.primaryAccent.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            LocalStrings.current["matrix.trail_length_desc"].ifEmpty { "How far the fading tail extends behind each falling column" },
+                            fontSize = ts.bodySmall, color = colors.textSecondary,
+                            fontFamily = quicksandFontFamily, fontWeight = FontWeight.Bold
+                        )
+                        GlideOptionSelector(
+                            options = listOf(
+                                tr("text_catalog.short", "Short"),
+                                tr("particles.sensitivity_medium", "Medium"),
+                                tr("appearance.anim_full", "Full")
+                            ),
+                            selectedIndex = matrixFadeLength.coerceIn(0, 2),
+                            onOptionSelected = { performHaptic(); onMatrixFadeLengthChange(it) },
+                            colors = colors, modifier = Modifier.fillMaxWidth(), enabled = enabled
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
