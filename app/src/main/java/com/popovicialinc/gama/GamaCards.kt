@@ -593,8 +593,13 @@ fun RendererCard(
     onShizukuErrorClick: () -> Unit,
     oledMode: Boolean = false,
     rendererLoading: Boolean = false,
-    lastSwitchTime: Long = 0L  // epoch millis; 0 means never recorded
+    lastSwitchTime: Long = 0L,  // epoch millis; 0 means never recorded
+    rootAvailable: Boolean = false
 ) {
+    // Root is a first-class backend: the card is "ready" when either Shizuku
+    // permission or root access is available.
+    val backendReady = shizukuReady || rootAvailable
+
     val density = LocalDensity.current
     val ts = LocalTypeScale.current
     val animLevel = LocalAnimationLevel.current
@@ -618,7 +623,7 @@ fun RendererCard(
 
     // ── State color: accent when ready, red/amber when not ──────────────────
     val stateColor = when {
-        shizukuReady -> colors.primaryAccent
+        backendReady -> colors.primaryAccent
         !shizukuRunning -> Color(0xFFFF3B30)
         else -> Color(0xFFE8A020)
     }
@@ -626,10 +631,10 @@ fun RendererCard(
 
     // ── Pulse animations: only run when actually needed ───────────────────────
     // Each InfiniteTransition is created only in the branch where it's used.
-    // On the happy path (shizukuReady = true) the error transitions don't exist —
+    // On the happy path (backendReady = true) the error transitions don't exist —
     // zero ticks, zero slots, zero per-frame CPU on old chipsets.
 
-    val warningBorderAlpha by if (!shizukuReady) {
+    val warningBorderAlpha by if (!backendReady) {
         val t = rememberInfiniteTransition(label = "renderer_warning")
         t.animateFloat(
             initialValue = 0.30f, targetValue = 1.0f,
@@ -642,7 +647,7 @@ fun RendererCard(
         remember { mutableFloatStateOf(0.30f) }
     }
 
-    val glowAlpha by if (!shizukuReady) {
+    val glowAlpha by if (!backendReady) {
         val t = rememberInfiniteTransition(label = "renderer_glow")
         t.animateFloat(
             initialValue = 0.22f, targetValue = 0.55f,
@@ -688,7 +693,7 @@ fun RendererCard(
     val nameTY = 0f
 
     // ── Colors ───────────────────────────────────────────────────────────────
-    val borderColor = if (!shizukuReady) {
+    val borderColor = if (!backendReady) {
         // Breathing outline in error/warning state
         stateColor.copy(alpha = warningBorderAlpha)
     } else {
@@ -698,13 +703,13 @@ fun RendererCard(
     // Border width follows the same single press progress as the scale, exactly like SettingsNavigationCard.
     val rendererCardRestBorderWidth = if (oledMode) 0.75f else 1f
     val borderWidth = when {
-        !shizukuReady -> 1.5.dp
+        !backendReady -> 1.5.dp
         else -> (rendererCardRestBorderWidth + rcp * 0.65f).dp
     }
-    val rendererCardPressedTintAlpha = if (shizukuReady) rcp * 0.08f else 0f
+    val rendererCardPressedTintAlpha = if (backendReady) rcp * 0.08f else 0f
 
     val isDarkTheme = cardBackground.luminance() < 0.5f
-    val subtleWarningBackground = if (!shizukuReady) {
+    val subtleWarningBackground = if (!backendReady) {
         if (!shizukuRunning) {
             // Red state
             if (isDarkTheme)
@@ -732,7 +737,7 @@ fun RendererCard(
             // Light: soft warm amber — gentle warning tint without being too intense
                 Color(0xFFFFF5D6)
         }
-    } else if (shizukuReady) {
+    } else if (backendReady) {
         cardBackground
     } else {
         cardBackground
@@ -746,10 +751,10 @@ fun RendererCard(
         contentAlignment = Alignment.Center,
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Colored shadow blob — only rendered when Shizuku is NOT ready.
+        // Colored shadow blob — only rendered when NO backend is ready.
         // API 31+: blurred glow. API < 31: unblurred radial gradient at reduced
         // alpha — same colour signal, zero GPU blur cost on old chipsets.
-        if (!shizukuReady) {
+        if (!backendReady) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Box(
                     modifier = Modifier
@@ -788,7 +793,7 @@ fun RendererCard(
             contentAlignment = Alignment.Center
         ) {
             // Neon glow behind the card border
-            if (shizukuReady && allowWholeCardGlow && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (backendReady && allowWholeCardGlow && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val cardGlowAlpha = 0.80f
                 Box(
                     modifier = Modifier
@@ -817,8 +822,8 @@ fun RendererCard(
                     .background(colors.primaryAccent.copy(alpha = rendererCardPressedTintAlpha))
                     .background(
                         Brush.radialGradient(
-                            0.0f to colors.primaryAccent.copy(alpha = if (shizukuReady && allowWholeCardGlow) 0.13f else 0.0f),
-                            0.58f to colors.primaryAccent.copy(alpha = if (shizukuReady && allowWholeCardGlow) 0.045f else 0.0f),
+                            0.0f to colors.primaryAccent.copy(alpha = if (backendReady && allowWholeCardGlow) 0.13f else 0.0f),
+                            0.58f to colors.primaryAccent.copy(alpha = if (backendReady && allowWholeCardGlow) 0.045f else 0.0f),
                             1.0f to Color.Transparent,
                             radius = with(density) { 210.dp.toPx() },
                             center = Offset.Unspecified
@@ -826,9 +831,9 @@ fun RendererCard(
                     )
                     .background(
                         Brush.verticalGradient(
-                            0.0f to colors.primaryAccent.copy(alpha = if (shizukuReady && allowWholeCardGlow) 0.035f else 0.0f),
+                            0.0f to colors.primaryAccent.copy(alpha = if (backendReady && allowWholeCardGlow) 0.035f else 0.0f),
                             0.55f to Color.Transparent,
-                            1.0f to colors.primaryAccent.copy(alpha = if (shizukuReady && allowWholeCardGlow) 0.075f else 0.0f)
+                            1.0f to colors.primaryAccent.copy(alpha = if (backendReady && allowWholeCardGlow) 0.075f else 0.0f)
                         )
                     )
                     .border(
@@ -836,7 +841,7 @@ fun RendererCard(
                         color = borderColor,
                         shape = RoundedCornerShape(cardCorner)
                     )
-                    .pointerInput(shizukuReady, onShizukuErrorClick) {
+                    .pointerInput(backendReady, onShizukuErrorClick) {
                         detectTapGestures(
                             onPress = {
                                 val hapticStartedAt = GamaHaptics.pressStart(context, view)
@@ -844,7 +849,7 @@ fun RendererCard(
                                 val released = tryAwaitRelease()
                                 currentRendererPressed = false
                                 GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, released)
-                                if (released && !shizukuReady) onShizukuErrorClick()
+                                if (released && !backendReady) onShizukuErrorClick()
                             }
                         )
                     }
@@ -858,7 +863,7 @@ fun RendererCard(
                 ) {
                     Text(
                         text = LocalStrings.current["widget.current_renderer"].ifEmpty { "CURRENT RENDERER" },
-                        color = if (!shizukuReady) stateColor else colors.primaryAccent.copy(alpha = 0.86f),
+                        color = if (!backendReady) stateColor else colors.primaryAccent.copy(alpha = 0.86f),
                         fontSize = ts.labelLarge,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp,
@@ -981,7 +986,7 @@ fun RendererCard(
                         )
                     }
 
-                    if (!shizukuReady) {
+                    if (!backendReady) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(
                             modifier = Modifier

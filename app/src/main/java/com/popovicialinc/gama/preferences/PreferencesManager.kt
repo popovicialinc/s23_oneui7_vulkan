@@ -59,7 +59,6 @@ class PreferencesManager(context: Context) {
         const val AGGRESSIVE_MODE_KEY = "aggressive_mode"
         const val KILL_LAUNCHER_KEY = "kill_launcher"
         const val KILL_KEYBOARD_KEY = "kill_keyboard"
-        const val DOZE_MODE_KEY = "doze_mode"
         const val SHOW_GPUWATCH_BUTTON_KEY = "show_gpuwatch_button"
         const val STAGGER_ENABLED_KEY = "stagger_enabled"
         const val BACK_BUTTON_AVOIDANCE_ENABLED_KEY = "back_button_avoidance_enabled"
@@ -165,7 +164,6 @@ class PreferencesManager(context: Context) {
         aggressiveMode: Boolean,
         killLauncher: Boolean,
         killKeyboard: Boolean,
-        dozeMode: Boolean,
         showGpuWatchButton: Boolean,
         staggerEnabled: Boolean,
         backButtonAvoidanceEnabled: Boolean,
@@ -233,7 +231,6 @@ class PreferencesManager(context: Context) {
                 putBoolean(AGGRESSIVE_MODE_KEY, aggressiveMode)
                 putBoolean(KILL_LAUNCHER_KEY, killLauncher)
                 putBoolean(KILL_KEYBOARD_KEY, killKeyboard)
-                putBoolean(DOZE_MODE_KEY, dozeMode)
                 putBoolean(SHOW_GPUWATCH_BUTTON_KEY, showGpuWatchButton)
                 putBoolean(STAGGER_ENABLED_KEY, staggerEnabled)
                 putBoolean(BACK_BUTTON_AVOIDANCE_ENABLED_KEY, backButtonAvoidanceEnabled)
@@ -342,7 +339,6 @@ class PreferencesManager(context: Context) {
     fun getAggressiveMode(default: Boolean = false): Boolean = prefs.getBoolean(AGGRESSIVE_MODE_KEY, default)
     fun getKillLauncher(default: Boolean = false): Boolean = prefs.getBoolean(KILL_LAUNCHER_KEY, default)
     fun getKillKeyboard(default: Boolean = false): Boolean = prefs.getBoolean(KILL_KEYBOARD_KEY, default)
-    fun getDozeMode(default: Boolean = false): Boolean = prefs.getBoolean(DOZE_MODE_KEY, default)
     fun getShowGpuWatchButton(default: Boolean = true): Boolean = prefs.getBoolean(SHOW_GPUWATCH_BUTTON_KEY, default)
     fun getStaggerEnabled(default: Boolean = false): Boolean = prefs.getBoolean(STAGGER_ENABLED_KEY, default)
     fun getBackButtonAvoidanceEnabled(default: Boolean = true): Boolean =

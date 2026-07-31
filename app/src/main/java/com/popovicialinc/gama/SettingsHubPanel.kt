@@ -116,7 +116,7 @@ fun SettingsPanel(
 
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
             SettingsNavigationCard(
-                title = strings["settings.appearance"].ifEmpty { "APPEARANCE" },
+                title = strings["settings.appearance"].ifEmpty { "VISUALS" },
                 description = strings["settings.appearance_desc"].ifEmpty { "Colors, theme, effects, animations, and interface scale" },
                 onClick = { performHaptic(); onAppearanceClick() },
                 isSmallScreen = isSmallScreen, colors = colors,
@@ -127,7 +127,7 @@ fun SettingsPanel(
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
             SettingsNavigationCard(
                 title = strings["settings.renderer"].ifEmpty { "RENDERER" },
-                description = strings["settings.renderer_desc"].ifEmpty { "Switching engine, aggressive mode, doze, and launcher behavior" },
+                description = strings["settings.renderer_desc"].ifEmpty { "Switching engine, aggressive mode, launcher and keyboard behavior" },
                 onClick = { performHaptic(); onRendererClick() },
                 isSmallScreen = isSmallScreen, colors = colors,
                 cardBackground = cardBackground, oledMode = oledMode

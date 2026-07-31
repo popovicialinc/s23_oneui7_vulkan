@@ -16,6 +16,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuRemoteProcess
 
 object ShizukuHelper {
 
@@ -32,39 +33,51 @@ object ShizukuHelper {
         } catch (_: Exception) { false }
     }
 
-    // ── Shell command execution via Shizuku.newProcess() ─────────────────────
-    // Still uses reflection for newProcess since it keeps the Shizuku source
-    // dependency minimal — only Shizuku.java needs to be vendored, not the
-    // full process wrapper hierarchy.
+    // ── Root (su) backend ─────────────────────────────────────────────────────
+    // Root is a first-class alternative to Shizuku: GAMA works with whichever
+    // backend is available (root first, Shizuku second, neither = error).
 
-    // ── Shell command execution via Shizuku.newProcess() ─────────────────────
-    // Still uses reflection for newProcess since it keeps the Shizuku source
-    // dependency minimal — only Shizuku.java needs to be vendored, not the
-    // full process wrapper hierarchy.
-    //
-    // runCommand is a suspend function so it can be cancelled by the caller's
-    // coroutine scope (e.g. the user dismisses the switch dialog mid-switch).
-    // The blocking waitFor runs on Dispatchers.IO — never on the main thread.
-    //
-    // Timeout is 3 seconds, not 10. `getprop`, `setprop`, `am crash`, and
-    // `am force-stop` all complete in well under 1s on any supported device.
-    // 10s was just the outer safety net; 3s still covers any legitimate slow
-    // case while cutting the worst-case UI freeze from 10s to 3s if Shizuku
-    // hangs on an unusual command.
+    @Volatile
+    private var rootAvailabilityCache: Boolean? = null
 
-    suspend fun runCommand(cmd: String): String = withContext(Dispatchers.IO) {
+    /**
+     * Probes for a working `su` binary and caches the result. Safe to call
+     * repeatedly — the process is spawned once per app lifetime.
+     */
+    suspend fun refreshRootAvailability(): Boolean = withContext(Dispatchers.IO) {
+        rootAvailabilityCache?.let { return@withContext it }
+        val result = try {
+            val process = ProcessBuilder("su", "-c", "id")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            val exited = process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+            if (!exited) process.destroy()
+            val ok = exited && process.exitValue() == 0 && output.contains("uid=0")
+            ok
+        } catch (_: Exception) { false }
+        rootAvailabilityCache = result
+        result
+    }
+
+    fun isRootAvailable(): Boolean = rootAvailabilityCache ?: false
+
+    /** True when any backend (root or Shizuku) can execute commands right now. */
+    fun isBackendReady(): Boolean = isRootAvailable() || (checkBinder() && checkPermission())
+
+    /**
+     * Silently installs an APK via root (`pm install -r`). No confirmation dialog
+     * appears at all. Returns false if root isn't available or the install failed.
+     */
+    suspend fun installApkViaRoot(apkPath: String): Boolean {
+        if (!isRootAvailable()) return false
+        val result = runRootCommand("pm install -r \"$apkPath\"")
+        return result == "Success"
+    }
+
+    private suspend fun runRootCommand(cmd: String): String = withContext(Dispatchers.IO) {
         try {
-            val cls = Shizuku::class.java
-            val method = cls.getDeclaredMethod(
-                "newProcess",
-                Array<String>::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
-            method.isAccessible = true
-            val remoteProcess = method.invoke(null, arrayOf("sh", "-c", cmd), null, null)
-            val process = remoteProcess as? Process ?: return@withContext "Error: Could not cast to Process"
-
+            val process = ProcessBuilder("su", "-c", cmd).start()
             try {
                 val (output, error, finished) = coroutineScope {
                     val outputDeferred = async(Dispatchers.IO) {
@@ -87,7 +100,108 @@ object ShizukuHelper {
                 }
 
                 val exitCode = if (finished) {
-                    try { process.exitValue() } catch (_: IllegalThreadStateException) { -1 }
+                    try { process.exitValue() } catch (_: Exception) { -1 }
+                } else -1
+                when {
+                    !finished -> "Error: command timed out"
+                    output.isNotEmpty() -> output.trim()
+                    exitCode != 0 && error.isNotEmpty() -> "Error: ${error.trim()}"
+                    else -> "Success"
+                }
+            } finally {
+                process.destroy()
+            }
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
+    }
+
+    // ── Shell command execution via Shizuku.newProcess() ─────────────────────
+    // Still uses reflection for newProcess since it keeps the Shizuku source
+    // dependency minimal — only Shizuku.java needs to be vendored, not the
+    // full process wrapper hierarchy.
+
+    /**
+     * Timeout-aware wait that works for both native and Shizuku remote processes.
+     *
+     * ShizukuRemoteProcess's base-class waitFor(timeout) polls isAlive() -> exitValue(),
+     * and each poll is a Binder call. While the remote process is still running the
+     * Shizuku server throws IllegalStateException("process hasn't exited") — a DIFFERENT
+     * type than the IllegalThreadStateException java.lang.Process.isAlive() catches,
+     * so it escapes and surfaces as a bogus "Error: process hasn't exited". waitForTimeout()
+     * performs the whole wait server-side and returns a clean boolean, so it must be
+     * used for remote processes.
+     */
+    private fun waitForProcessExit(process: Process, timeoutSeconds: Long): Boolean {
+        return try {
+            if (process is ShizukuRemoteProcess) {
+                process.waitForTimeout(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+            } else {
+                process.waitFor(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    // ── Shell command execution via Shizuku.newProcess() ─────────────────────
+    // Still uses reflection for newProcess since it keeps the Shizuku source
+    // dependency minimal — only Shizuku.java needs to be vendored, not the
+    // full process wrapper hierarchy.
+    //
+    // runCommand is a suspend function so it can be cancelled by the caller's
+    // coroutine scope (e.g. the user dismisses the switch dialog mid-switch).
+    // The blocking waitFor runs on Dispatchers.IO — never on the main thread.
+    //
+    // Timeout is 3 seconds, not 10. `getprop`, `setprop`, `am crash`, and
+    // `am force-stop` all complete in well under 1s on any supported device.
+    // 10s was just the outer safety net; 3s still covers any legitimate slow
+    // case while cutting the worst-case UI freeze from 10s to 3s if Shizuku
+    // hangs on an unusual command.
+
+    suspend fun runCommand(cmd: String): String = withContext(Dispatchers.IO) {
+        if (isRootAvailable()) {
+            return@withContext runRootCommand(cmd)
+        }
+        if (!checkBinder() || !checkPermission()) {
+            if (refreshRootAvailability()) return@withContext runRootCommand(cmd)
+            return@withContext "Error: Shizuku not available and no root access"
+        }
+        try {
+            val cls = Shizuku::class.java
+            val method = cls.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
+            method.isAccessible = true
+            val remoteProcess = method.invoke(null, arrayOf("sh", "-c", cmd), null, null)
+            val process = remoteProcess as? Process ?: return@withContext "Error: Could not cast to Process"
+
+            try {
+                val (output, error, finished) = coroutineScope {
+                    val outputDeferred = async(Dispatchers.IO) {
+                        process.inputStream.bufferedReader().readText()
+                    }
+                    val errorDeferred = async(Dispatchers.IO) {
+                        process.errorStream.bufferedReader().readText()
+                    }
+
+                    val didFinish = waitForProcessExit(process, 3)
+                    if (!didFinish) {
+                        outputDeferred.cancel()
+                        errorDeferred.cancel()
+                        return@coroutineScope Triple("", "", false)
+                    }
+
+                    val out = try { outputDeferred.await() } catch (_: Exception) { "" }
+                    val err = try { errorDeferred.await() } catch (_: Exception) { "" }
+                    Triple(out, err, true)
+                }
+
+                val exitCode = if (finished) {
+                    try { process.exitValue() } catch (_: Exception) { -1 }
                 } else -1
                 when {
                     !finished -> "Error: command timed out"
@@ -124,7 +238,7 @@ object ShizukuHelper {
     //  4. Only return "Unknown" on a genuine I/O / permission error
 
     suspend fun getCurrentRenderer(): String = withContext(Dispatchers.IO) {
-        if (!checkBinder() || !checkPermission()) return@withContext "Unknown"
+        if (!isBackendReady() && !refreshRootAvailability()) return@withContext "Unknown"
 
         // ── Source 1: the prop GAMA directly sets ─────────────────────────────
         val primary = runCommand("getprop debug.hwui.renderer").trim()
@@ -269,7 +383,22 @@ object ShizukuHelper {
             .orEmpty()
             .takeIf { it.isNotBlank() && it != "null" }
         val originalImePackage = originalIme?.let { packageFromComponent(it) }.orEmpty()
-        val launcherPackages = knownLauncherPackages()
+        // Detect the ACTUAL home launcher — the static known-launcher list misses
+        // third-party launchers (Nova, Lawnchair, ...), so "kill launcher" appeared
+        // to do nothing for users running those. resolve-activity returns the real
+        // default home, whatever it is.
+        val activeLauncher = runCommand(
+            "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
+        )
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.contains("/") && !it.contains("ResolverActivity") }
+            ?.substringBefore('/')
+            ?.trim()
+            .orEmpty()
+            .takeIf { isSafePackageName(it) }
+            .orEmpty()
+        val launcherPackages = knownLauncherPackages() + activeLauncher
         val xiaomiFamilyDevice = isXiaomiFamilyDevice()
         val protectedPackages = neverForceStopPackages().toMutableSet().apply {
             addAll(excludedApps)
@@ -308,7 +437,32 @@ object ShizukuHelper {
         }
 
         onVerboseOutput?.invoke("Running: setprop debug.hwui.renderer $propValue\n")
-        runCommand("setprop debug.hwui.renderer $propValue").also { onVerboseOutput?.invoke("Output: $it\n\n") }
+        val setpropResult = runCommand("setprop debug.hwui.renderer $propValue")
+        onVerboseOutput?.invoke("Output: $setpropResult\n\n")
+        if (setpropResult.startsWith("Error", ignoreCase = true) ||
+            setpropResult.contains("failed", ignoreCase = true) ||
+            setpropResult.contains("permission denied", ignoreCase = true)
+        ) {
+            // The shell can report a bogus failure (e.g. the Shizuku remote process
+            // died mid-wait) while the prop actually applied. Trust the property
+            // itself: read it back before giving up.
+            val readBack = runCommand("getprop debug.hwui.renderer").trim()
+            if (readBack.equals(propValue, ignoreCase = true)) {
+                onVerboseOutput?.invoke(
+                    "setprop reported an error, but the prop reads back as '$readBack' — continuing.\n\n"
+                )
+            } else {
+                withContext(Dispatchers.Main) {
+                    onStatusUpdate("$label setprop FAILED: $setpropResult")
+                    Toast.makeText(
+                        context,
+                        "Could not set renderer — $setpropResult",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@withContext
+            }
+        }
 
         if (aggressiveMode) {
             val packages = getAllPackageNames()
@@ -339,33 +493,57 @@ object ShizukuHelper {
         // that may restart the keyboard. If disabled, we protect and restore the
         // original IME to prevent Samsung/OneUI from falling back to Samsung Keyboard.
         if (killKeyboard && originalImePackage.isNotBlank()) {
-            val cmd = "am force-stop ${shellQuote(originalImePackage)}; sleep 0.2; ime set ${shellQuote(originalIme ?: "")} >/dev/null 2>&1 || true"
-            onVerboseOutput?.invoke("Running: $cmd\n")
-            runCommand(cmd).also { onVerboseOutput?.invoke("Output: $it\n\n") }
+            // IMEs only run while a text field is focused, so a bare force-stop can
+            // look like nothing happened. Kill the process, let the system restart
+            // it, then explicitly re-bind the original IME. The output is surfaced
+            // so a refused force-stop is visible instead of silently ignored.
+            val cmd = "am force-stop ${shellQuote(originalImePackage)}; sleep 0.5; ime set ${shellQuote(originalIme ?: "")} >/dev/null 2>&1"
+            val out = runCommand(cmd)
+            onVerboseOutput?.invoke("Running: $cmd\nOutput: $out\n\n")
+            if (out.startsWith("Error", ignoreCase = true)) {
+                onVerboseOutput?.invoke("Keyboard restart failed: $out\n")
+            }
         } else {
             restoreOriginalImeIfNeeded("renderer switch")
         }
 
-        // ── Launcher restart (opt-in, Xiaomi guarded) ────────────────────────
-        // Never force-stop com.miui.home. On Xiaomi / Redmi / POCO / HyperOS,
-        // skip launcher restarts entirely, even if the toggle is enabled.
+        // ── System & launcher restart (opt-in, Xiaomi launcher-guarded) ──────
+        // Restarts the launcher AND SystemUI so the new renderer applies to the
+        // system chrome too (status bar, notification shade, recents). SystemUI
+        // comes right back on its own, so the restart is safe. Only the launcher
+        // is Xiaomi-guarded — com.miui.home is never force-stopped.
         if (killLauncher) {
-            if (xiaomiFamilyDevice) {
-                onVerboseOutput?.invoke("Skipping launcher restart: Xiaomi/Redmi/POCO/HyperOS safety guard is active.\n\n")
-            } else {
+            val restartTargets = mutableListOf<String>()
+            if (!xiaomiFamilyDevice) {
                 launcherPackages
                     .filter { it != "com.miui.home" }
                     .filter { pkg -> canForceStopPackage(pkg) }
-                    .forEach { pkg ->
-                        val cmd = "am force-stop ${shellQuote(pkg)}"
-                        onVerboseOutput?.invoke("Running: $cmd\n")
-                        runCommand(cmd).also { onVerboseOutput?.invoke("Output: $it\n\n") }
-                    }
+                    .forEach(restartTargets::add)
+            }
+            restartTargets += "com.android.systemui"
+            restartTargets.forEach { pkg ->
+                val cmd = "am force-stop ${shellQuote(pkg)}"
+                val out = runCommand(cmd)
+                onVerboseOutput?.invoke("Running: $cmd\nOutput: $out\n\n")
+                if (out.startsWith("Error", ignoreCase = true)) {
+                    onVerboseOutput?.invoke("Restart failed ($pkg): $out\n")
+                }
             }
         }
 
+        // ── Read-back verification ────────────────────────────────────────────
+        // The old code reported success unconditionally even when setprop silently
+        // failed (e.g. SELinux denial), which made the switch feel "too fast" —
+        // nothing had actually changed. Read the prop back and report honestly.
+        val verifyDetail = runCommand("getprop debug.hwui.renderer").trim()
+        val verified = verifyDetail.equals(propValue, ignoreCase = true) ||
+            (verifyDetail == "Success" && propValue == "opengl") // unset prop = OpenGL default
+
         withContext(Dispatchers.Main) {
-            onStatusUpdate("$label commands executed!")
+            onStatusUpdate(
+                if (verified) "$label commands executed!"
+                else "$label applied, but the renderer prop reads back as '${verifyDetail.takeUnless { it.startsWith("Error", ignoreCase = true) } ?: "unreadable"}'"
+            )
             Toast.makeText(context, "Switched to $label", Toast.LENGTH_SHORT).show()
         }
     }
@@ -435,6 +613,10 @@ object ShizukuHelper {
         scope: CoroutineScope,
         block: suspend () -> Unit
     ) {
+        if (isRootAvailable()) {
+            scope.launch { block() }
+            return
+        }
         if (!checkBinder()) {
             Toast.makeText(context, "Shizuku not running!", Toast.LENGTH_SHORT).show()
             return
@@ -489,7 +671,42 @@ object ShizukuHelper {
      * always exits cleanly within the timeout.
      */
     suspend fun getAllPackageNames(): List<String> = withContext(Dispatchers.IO) {
-        if (!checkBinder() || !checkPermission()) return@withContext emptyList()
+        val shizukuReady = checkBinder() && checkPermission()
+        if (!shizukuReady && !isRootAvailable() && !refreshRootAvailability()) return@withContext emptyList()
+        if (!shizukuReady) {
+            // Root path: same concurrent-reader pattern, just spawned via su.
+            return@withContext try {
+                val process = ProcessBuilder("su", "-c", "pm list packages -a").start()
+                try {
+                    val (outputText, _) = coroutineScope {
+                        val outputDeferred = async(Dispatchers.IO) {
+                            process.inputStream.bufferedReader().readText()
+                        }
+                        val errorDeferred = async(Dispatchers.IO) {
+                            process.errorStream.bufferedReader().readText()
+                        }
+                        val finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+                        if (!finished) {
+                            outputDeferred.cancel()
+                            errorDeferred.cancel()
+                            return@coroutineScope Pair("", "")
+                        }
+                        val out = try { outputDeferred.await() } catch (_: Exception) { "" }
+                        errorDeferred.cancel()
+                        Pair(out, "")
+                    }
+                    outputText
+                        .lines()
+                        .filter { it.startsWith("package:") }
+                        .map { it.removePrefix("package:").trim() }
+                        .filter { it.isNotEmpty() }
+                } finally {
+                    process.destroy()
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
         try {
             val cls    = Shizuku::class.java
             val method = cls.getDeclaredMethod(
@@ -517,7 +734,7 @@ object ShizukuHelper {
                         process.errorStream.bufferedReader().readText()
                     }
 
-                    val finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+                    val finished = waitForProcessExit(process, 30)
 
                     if (!finished) {
                         outputDeferred.cancel()
@@ -583,7 +800,7 @@ object ShizukuHelper {
                         process.errorStream.bufferedReader().readText()
                     }
 
-                    val finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+                    val finished = waitForProcessExit(process, 30)
 
                     if (!finished) {
                         outputDeferred.cancel()

@@ -288,6 +288,10 @@ fun GamaUI(
 
     var shizukuRunning by remember { mutableStateOf(false) }
     var shizukuPermissionGranted by remember { mutableStateOf(false) }
+    // Root backend (su) — first-class alternative to Shizuku. When true, the
+    // renderer switches work even if Shizuku isn't running or authorized.
+    var rootAvailable by remember { mutableStateOf(false) }
+    var showRootAccessDialog by remember { mutableStateOf(false) }
 
     // Notification permission — re-evaluated once on every ON_RESUME (e.g. returning
     // from the OS permission dialog), not on every recomposition.
@@ -312,6 +316,13 @@ fun GamaUI(
             performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
             showSuccessDialog = false
         }
+    }
+
+    BackHandler(enabled = showRootAccessDialog) {
+        performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
+        showRootAccessDialog = false
+        pendingRendererSwitch = null
+        pendingRendererName = ""
     }
 
     // (DeveloperMenuDialog BackHandler removed — showDeveloperMenu was dead state)
@@ -574,7 +585,6 @@ fun GamaUI(
     var aggressiveMode by remember { mutableStateOf(prefs.getBoolean("aggressive_mode", false)) }
     var killLauncher by remember { mutableStateOf(prefs.getBoolean("kill_launcher", false)) }
     var killKeyboard by remember { mutableStateOf(prefs.getBoolean("kill_keyboard", false)) }
-    var dozeMode by remember { mutableStateOf(prefs.getBoolean("doze_mode", false)) }
     var showGpuWatchButton by remember { mutableStateOf(prefs.getBoolean("show_gpuwatch_button", false)) }
     var staggerEnabled by remember { mutableStateOf(prefs.getBoolean("stagger_enabled", true)) }
     var backButtonAvoidanceEnabled by remember {
@@ -734,14 +744,6 @@ fun GamaUI(
 
     // Aggressive mode confirmation
     var aggressiveModeConfirmed by remember { mutableStateOf(false) }
-    var dontShowAggressiveWarning by remember {
-        mutableStateOf(
-            prefs.getBoolean(
-                "dont_show_aggressive_warning",
-                false
-            )
-        )
-    }
 
 
     // remember(timeOffsetHours): Calendar.getInstance() is called once per offset change,
@@ -765,16 +767,6 @@ fun GamaUI(
         if (sanitized.toArgb() != customAccentColor.toArgb()) {
             customAccentColor = sanitized
             prefs.edit().putInt("custom_accent", sanitized.toArgb()).apply()
-        }
-    }
-
-    // Dark/OLED mode uses a pure black background, so card shadows are effectively invisible.
-    // Keep the setting honest: if the app enters dark mode, turn CARD SHADOWS off instead of
-    // leaving a useless GPU blur pass enabled behind black cards.
-    LaunchedEffect(effectiveOledMode) {
-        if (effectiveOledMode && shadowsEnabled) {
-            shadowsEnabled = false
-            prefs.edit().putBoolean("shadows_enabled", false).apply()
         }
     }
 
@@ -1034,7 +1026,6 @@ fun GamaUI(
         val snapAggressive = aggressiveMode
         val snapKillLauncher = killLauncher
         val snapKillKeyboard = killKeyboard
-        val snapDoze = dozeMode
         val snapShowGpuWatch = showGpuWatchButton
         val snapStagger = staggerEnabled
         val snapBackButtonAvoidance = backButtonAvoidanceEnabled
@@ -1094,7 +1085,6 @@ fun GamaUI(
                 putBoolean("aggressive_mode", snapAggressive)
                 putBoolean("kill_launcher", snapKillLauncher)
                 putBoolean("kill_keyboard", snapKillKeyboard)
-                putBoolean("doze_mode", snapDoze)
                 putBoolean("show_gpuwatch_button", snapShowGpuWatch)
                 putBoolean("stagger_enabled", snapStagger)
                 putBoolean("back_button_avoidance_enabled", snapBackButtonAvoidance)
@@ -1203,7 +1193,7 @@ fun GamaUI(
             showWarningDialog || showGitHubDialog || showResourcesPanel || showExternalLinkConfirm ||
                     showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
                     showSystem || showRendererPanel ||
-                    showShizukuHelp || showSuccessDialog ||
+                    showShizukuHelp || showSuccessDialog || showRootAccessDialog ||
                     showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
                     showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
                     showEffects || showParticles || showParticlesAppearance ||
@@ -1217,7 +1207,7 @@ fun GamaUI(
             showWarningDialog || showGitHubDialog || showResourcesPanel ||
                     showSettings || showSettingsSearch || showHapticsPanel || showAppearance || showColorCustomization || showGradient ||
                     showSystem || showRendererPanel ||
-                    showShizukuHelp || showSuccessDialog ||
+                    showShizukuHelp || showSuccessDialog || showRootAccessDialog ||
                     showVerbosePanel || showAggressiveWarning || showGPUWatchConfirm ||
                     showDeveloper || showEasterEgg || showNotifications || showBackup || showCrashLog ||
                     showEffects || showParticles || showParticlesAppearance ||
@@ -1298,6 +1288,7 @@ fun GamaUI(
     LaunchedEffect(Unit) {
         shizukuRunning = ShizukuHelper.checkBinder()
         shizukuPermissionGranted = ShizukuHelper.checkPermission()
+        rootAvailable = ShizukuHelper.refreshRootAvailability()
 
         // ── Request notification permission once on first launch ─────────────
         if (!notifPermissionRequested && !ShizukuHelper.hasNotificationPermission(context)) {
@@ -1314,15 +1305,15 @@ fun GamaUI(
             prefs.edit().putBoolean("button_labels_shown", true).apply()
         }
 
-        shizukuStatus = if (shizukuRunning) {
-            if (shizukuPermissionGranted) {
+        shizukuStatus = when {
+            rootAvailable -> strings["main.root_ready"].ifEmpty { "Running with root access ✅" }
+            shizukuRunning && shizukuPermissionGranted -> {
                 if (userName.isNotEmpty()) strings["main.shizuku_ready_named"].replace("%s", userName)
                     .ifEmpty { "You're all set, $userName! ✅" } else strings["main.shizuku_ready"].ifEmpty { "Shizuku is running ✅" }
-            } else {
-                strings["main.shizuku_permission_needed"].ifEmpty { "Permission needed ⚠️" }
             }
-        } else {
-            strings["main.shizuku_not_running"].ifEmpty { "Shizuku isn't running ❌" }
+
+            shizukuRunning -> strings["main.shizuku_permission_needed"].ifEmpty { "Permission needed ⚠️" }
+            else -> strings["main.shizuku_not_running"].ifEmpty { "Shizuku isn't running ❌" }
         }
 
         scope.launch {
@@ -1338,7 +1329,7 @@ fun GamaUI(
             // the runtime prop has been cleared. Wall-clock comparison was broken
             // for any switch older than the current uptime (e.g. switched 16 days
             // ago — bootTimeMs is always > lastSwitchMs even with no reboot).
-            if (shizukuRunning && shizukuPermissionGranted) {
+            if (shizukuRunning && shizukuPermissionGranted || rootAvailable) {
                 // Shizuku is live — get the ground truth directly from the system.
                 val detectedRenderer = ShizukuHelper.getCurrentRenderer()
                 when (detectedRenderer) {
@@ -1947,7 +1938,8 @@ fun GamaUI(
                                                     },
                                                     oledMode = effectiveOledMode,
                                                     rendererLoading = rendererLoading,
-                                                    lastSwitchTime = lastSwitchTime
+                                                    lastSwitchTime = lastSwitchTime,
+                                                    rootAvailable = rootAvailable
                                                 )
                                                 // Vulkan | OpenGL
                                                 Row(
@@ -1965,12 +1957,6 @@ fun GamaUI(
                                                         text = strings["renderer.vulkan"].ifEmpty { "Vulkan" },
                                                         onClick = {
                                                             performRendererHaptic()
-                                                            if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                                shizukuHelpType =
-                                                                    if (!shizukuRunning) "not_running" else "permission"
-                                                                openMainPanelExclusive { showShizukuHelp = true }
-                                                                return@BigRendererButton
-                                                            }
                                                             pendingRendererName = "Vulkan"
                                                             pendingRendererSwitch = {
                                                                 verboseOutput = ""
@@ -1986,6 +1972,12 @@ fun GamaUI(
                                                             }
                                                             successDialogMessage =
                                                                 strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
+                                                            if (!lsShizukuReady && !rootAvailable) {
+                                                                shizukuHelpType =
+                                                                    if (!shizukuRunning) "not_running" else "permission"
+                                                                openMainPanelExclusive { showRootAccessDialog = true }
+                                                                return@BigRendererButton
+                                                            }
                                                             openMainPanelExclusive { showWarningDialog = true }
                                                         },
                                                         modifier = Modifier.weight(1f),
@@ -2000,12 +1992,6 @@ fun GamaUI(
                                                         text = strings["renderer.opengl"].ifEmpty { "OpenGL" },
                                                         onClick = {
                                                             performRendererHaptic()
-                                                            if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                                shizukuHelpType =
-                                                                    if (!shizukuRunning) "not_running" else "permission"
-                                                                openMainPanelExclusive { showShizukuHelp = true }
-                                                                return@BigRendererButton
-                                                            }
                                                             pendingRendererName = "OpenGL"
                                                             pendingRendererSwitch = {
                                                                 verboseOutput = ""
@@ -2021,6 +2007,12 @@ fun GamaUI(
                                                             }
                                                             successDialogMessage =
                                                                 strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
+                                                            if (!lsShizukuReady && !rootAvailable) {
+                                                                shizukuHelpType =
+                                                                    if (!shizukuRunning) "not_running" else "permission"
+                                                                openMainPanelExclusive { showRootAccessDialog = true }
+                                                                return@BigRendererButton
+                                                            }
                                                             openMainPanelExclusive { showWarningDialog = true }
                                                         },
                                                         modifier = Modifier.weight(1f),
@@ -2492,7 +2484,8 @@ fun GamaUI(
                                                 },
                                                 oledMode = effectiveOledMode,
                                                 rendererLoading = rendererLoading,
-                                                lastSwitchTime = lastSwitchTime
+                                                lastSwitchTime = lastSwitchTime,
+                                                rootAvailable = rootAvailable
                                             )
 
                                             // Row 1: Vulkan | OpenGL — big square cards
@@ -2511,12 +2504,6 @@ fun GamaUI(
                                                     text = strings["renderer.vulkan"].ifEmpty { "Vulkan" },
                                                     onClick = {
                                                         performRendererHaptic()
-                                                        if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                            shizukuHelpType =
-                                                                if (!shizukuRunning) "not_running" else "permission"
-                                                            openMainPanelExclusive { showShizukuHelp = true }
-                                                            return@BigRendererButton
-                                                        }
                                                         pendingRendererName = "Vulkan"
                                                         pendingRendererSwitch = {
                                                             verboseOutput = ""
@@ -2532,6 +2519,12 @@ fun GamaUI(
                                                         }
                                                         successDialogMessage =
                                                             strings["main.vulkan_applied"].ifEmpty { "Vulkan has been applied!" }
+                                                        if (!shizukuReady && !rootAvailable) {
+                                                            shizukuHelpType =
+                                                                if (!shizukuRunning) "not_running" else "permission"
+                                                            openMainPanelExclusive { showRootAccessDialog = true }
+                                                            return@BigRendererButton
+                                                        }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
                                                     modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -2546,12 +2539,6 @@ fun GamaUI(
                                                     text = strings["renderer.opengl"].ifEmpty { "OpenGL" },
                                                     onClick = {
                                                         performRendererHaptic()
-                                                        if (!shizukuRunning || !shizukuPermissionGranted) {
-                                                            shizukuHelpType =
-                                                                if (!shizukuRunning) "not_running" else "permission"
-                                                            openMainPanelExclusive { showShizukuHelp = true }
-                                                            return@BigRendererButton
-                                                        }
                                                         pendingRendererName = "OpenGL"
                                                         pendingRendererSwitch = {
                                                             verboseOutput = ""
@@ -2567,6 +2554,12 @@ fun GamaUI(
                                                         }
                                                         successDialogMessage =
                                                             strings["main.opengl_applied"].ifEmpty { "OpenGL has been applied!" }
+                                                        if (!shizukuReady && !rootAvailable) {
+                                                            shizukuHelpType =
+                                                                if (!shizukuRunning) "not_running" else "permission"
+                                                            openMainPanelExclusive { showRootAccessDialog = true }
+                                                            return@BigRendererButton
+                                                        }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
                                                     modifier = Modifier.weight(1f).aspectRatio(1f),
@@ -2726,6 +2719,22 @@ fun GamaUI(
                 label = "fallback_scrim_alpha"
             )
 
+            // Shared animated blur radius — used by the main menu AND the sun/moon,
+            // so the celestial blur transitions in perfect lock-step with the content
+            // behind it (same radius, same timing, same easing).
+            val mainMenuBlurRadius by animateDpAsState(
+                targetValue = if (blurShouldApply && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 20.dp else 0.dp,
+                animationSpec = if (animationLevel != 2) {
+                    tween(
+                        durationMillis = if (blurShouldApply) 400 else 330,
+                        easing = if (blurShouldApply) MotionTokens.Easing.emphasizedDecelerate else MotionTokens.Easing.emphasized
+                    )
+                } else {
+                    snap()
+                },
+                label = "main_menu_blur_radius"
+            )
+
             // ── Particles — rendered BEFORE mainContent so they are BEHIND the UI ──
             // Z-order in a Box = last child is on top. Placing particles here means:
             //   • They draw behind the card/buttons — visually correct ✓
@@ -2766,11 +2775,10 @@ fun GamaUI(
                     starMode = false,
                     timeModeEnabled = particleTimeMode,
                     timeOffsetHours = timeOffsetHours,
-                    anyPanelOpen = anyPanelOpen,
+                    blurRadius = mainMenuBlurRadius,
                     isLandscape = isLandscape,
                     nativeRefreshRate = particleNativeRefreshRate,
-                    quarterRefreshRate = particleQuarterRefreshRate,
-                    celestialDarkMode = effectiveOledMode
+                    quarterRefreshRate = particleQuarterRefreshRate
                 )
             }
 
@@ -2782,19 +2790,6 @@ fun GamaUI(
             // like it was re-entering or doing a tiny animation behind panels.
             //
             // The menu should stay physically still. Panels may animate; the menu should not.
-            val mainMenuBlurRadius by animateDpAsState(
-                targetValue = if (blurShouldApply && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) 20.dp else 0.dp,
-                animationSpec = if (animationLevel != 2) {
-                    tween(
-                        durationMillis = if (blurShouldApply) 400 else 330,
-                        easing = if (blurShouldApply) MotionTokens.Easing.emphasizedDecelerate else MotionTokens.Easing.emphasized
-                    )
-                } else {
-                    snap()
-                },
-                label = "main_menu_blur_radius"
-            )
-
             val mainContentModifier =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && mainMenuBlurRadius > 0.1.dp) {
                     Modifier
@@ -2823,6 +2818,48 @@ fun GamaUI(
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showShizukuHelp = false
+                },
+                isSmallScreen = isSmallScreen,
+                isLandscape = isLandscape,
+                isTablet = isTablet,
+                colors = colors,
+                cardBackground = cardBackground,
+                rootAvailable = rootAvailable
+            )
+
+            // Root vs Shizuku choice — shown when NO backend is ready and the user
+            // taps a renderer button. "Use Root" probes su and, if it works, runs
+            // the pending switch straight away.
+            RootAccessDialog(
+                visible = showRootAccessDialog,
+                onDismiss = {
+                    performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
+                    showRootAccessDialog = false
+                    pendingRendererSwitch = null
+                    pendingRendererName = ""
+                },
+                onUseShizuku = {
+                    performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
+                    showRootAccessDialog = false
+                    openMainPanelExclusive { showShizukuHelp = true }
+                },
+                onUseRoot = {
+                    performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
+                    showRootAccessDialog = false
+                    scope.launch {
+                        rootAvailable = ShizukuHelper.refreshRootAvailability()
+                        if (rootAvailable) {
+                            openMainPanelExclusive { showWarningDialog = true }
+                        } else {
+                            pendingRendererSwitch = null
+                            pendingRendererName = ""
+                            Toast.makeText(
+                                context,
+                                "No root access detected — install Magisk/KernelSU, or use Shizuku",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 },
                 isSmallScreen = isSmallScreen,
                 isLandscape = isLandscape,
@@ -2880,7 +2917,7 @@ fun GamaUI(
                     // 4. Verify in background and correct if needed
                     scope.launch {
                         delay(2500) // Wait for command to finish
-                        if (ShizukuHelper.checkBinder()) {
+                        if (ShizukuHelper.isBackendReady()) {
                             val newRenderer = ShizukuHelper.getCurrentRenderer()
                             if (newRenderer == "Vulkan" || newRenderer == "OpenGL") {
                                 currentRenderer = newRenderer
@@ -3119,8 +3156,6 @@ fun GamaUI(
                 onKillLauncherChange = { killLauncher = it; savePreferences() },
                 killKeyboard = killKeyboard,
                 onKillKeyboardChange = { killKeyboard = it; savePreferences() },
-                dozeMode = dozeMode,
-                onDozeModeChange = { dozeMode = it; savePreferences() },
                 showGpuWatchButton = showGpuWatchButton,
                 onShowGpuWatchButtonChange = { showGpuWatchButton = it; savePreferences() },
                 // System / App
@@ -3216,7 +3251,7 @@ fun GamaUI(
                     },
                     aggressiveMode = aggressiveMode,
                     onAggressiveModeChange = { enabled ->
-                        if (enabled && !aggressiveModeConfirmed && !dontShowAggressiveWarning) {
+                        if (enabled && !aggressiveModeConfirmed) {
                             aggressiveMode = true
                             performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                             showAggressiveWarning = true
@@ -3236,29 +3271,6 @@ fun GamaUI(
                     onKillKeyboardChange = { enabled ->
                         performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                         killKeyboard = enabled
-                        savePreferences()
-                    },
-                    dozeMode = dozeMode,
-                    onDozeModeChange = { enabled ->
-                        performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
-                        dozeMode = enabled
-                        scope.launch {
-                            try {
-                                if (enabled) {
-                                    // Enter doze: unplug battery reporting first, THEN force-idle.
-                                    // The unplug step is required on Samsung / Android 15+ —
-                                    // without it, force-idle silently does nothing.
-                                    // Mirrors the exact sequence used by DozeTileService.
-                                    ShizukuHelper.runCommand("dumpsys battery unplug")
-                                    ShizukuHelper.runCommand("dumpsys deviceidle force-idle")
-                                } else {
-                                    // Exit doze: unforce first, then reset battery reporting.
-                                    ShizukuHelper.runCommand("dumpsys deviceidle unforce")
-                                    ShizukuHelper.runCommand("dumpsys battery reset")
-                                }
-                            } catch (_: Exception) {
-                            }
-                        }
                         savePreferences()
                     },
                     showGpuWatchButton = showGpuWatchButton,
@@ -3973,12 +3985,7 @@ fun GamaUI(
                 isSmallScreen = isSmallScreen,
                 colors = colors,
                 cardBackground = cardBackground,
-                oledMode = effectiveOledMode,
-                dontShowAgain = dontShowAggressiveWarning,
-                onDontShowAgainChange = { checked ->
-                    dontShowAggressiveWarning = checked
-                    prefs.edit().putBoolean("dont_show_aggressive_warning", checked).apply()
-                }
+                oledMode = effectiveOledMode
             )
 
             GPUWatchConfirmDialog(
@@ -3990,6 +3997,7 @@ fun GamaUI(
                 onConfirm = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showGPUWatchConfirm = false
+                    // Straight to Developer Options — GPUWatch lives there.
                     try {
                         val intent = Intent("com.android.settings.SHOW_REGULATORY_INFO")
                         intent.setClassName(

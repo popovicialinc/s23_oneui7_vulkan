@@ -106,13 +106,10 @@ class TaskerReceiver : BroadcastReceiver() {
 
         val aggressive = intent.getBooleanExtra(EXTRA_AGGRESSIVE, false)
 
-        // Validate Shizuku before going async — fast checks, safe to do on main thread
-        if (!ShizukuHelper.checkBinder()) {
-            Toast.makeText(context, "GAMA: Shizuku not running!", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!ShizukuHelper.checkPermission()) {
-            Toast.makeText(context, "GAMA: Shizuku permission not granted", Toast.LENGTH_SHORT).show()
+        // Validate the backend before going async — fast checks, safe on main thread.
+        // Root is a first-class alternative: skip the Shizuku gate when su works.
+        if (!ShizukuHelper.isBackendReady()) {
+            Toast.makeText(context, "GAMA: Shizuku not running and no root access!", Toast.LENGTH_SHORT).show()
             return
         }
 

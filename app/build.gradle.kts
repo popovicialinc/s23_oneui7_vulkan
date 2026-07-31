@@ -25,8 +25,8 @@ android {
         applicationId = "com.popovicialinc.gama"
         minSdk = 29
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.4"
+        versionCode = 13
+        versionName = "1.5"
 
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

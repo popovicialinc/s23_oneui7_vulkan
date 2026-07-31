@@ -253,7 +253,7 @@ fun ParticlesSettingsPanel(
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = particlesEnabled) {
             Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
                 SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.appearance_title"].ifEmpty { "SHAPE & LOOK" },
+                    title       = LocalStrings.current["particles.shape_look"].ifEmpty { "SHAPE & LOOK" },
                     description = LocalStrings.current["particles.appearance_desc"].ifEmpty {
                         "Star mode, time-of-day sky, and visual style"
                     },
@@ -317,7 +317,7 @@ fun ParticlesAppearancePanel(
         isLandscape = isLandscape, isSmallScreen = isSmallScreen,
         oledMode = oledMode, colors = colors
     ) { _ ->
-        CleanTitle(text = LocalStrings.current["particles.appearance_title"].ifEmpty { "SHAPE &\nLOOK" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
+        CleanTitle(text = LocalStrings.current["particles.shape_look"].ifEmpty { "SHAPE &\nLOOK" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
 
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
             ToggleCard(

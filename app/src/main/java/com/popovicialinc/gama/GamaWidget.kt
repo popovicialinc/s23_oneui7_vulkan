@@ -163,12 +163,10 @@ class GamaWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val p = context.getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
 
-        // Multi-source renderer detection — tries shell when Shizuku is available,
-        // falls back to an educated guess (boot-time aware) when it isn't.
+        // Multi-source renderer detection — tries shell when a backend (Shizuku
+        // or root) is available, falls back to an educated guess (boot-time aware).
         val r: String = try {
-            val binderOk = ShizukuHelper.checkBinder()
-            val permOk   = ShizukuHelper.checkPermission()
-            if (binderOk && permOk) {
+            if (ShizukuHelper.isBackendReady() || ShizukuHelper.refreshRootAvailability()) {
                 val detected = withContext(Dispatchers.IO) { ShizukuHelper.getCurrentRenderer() }
                 if (detected != "Unknown") {
                     p.edit().putString("last_renderer", detected).apply()
@@ -184,8 +182,7 @@ class GamaWidget : GlanceAppWidget() {
         }
 
         val binderOk = try { ShizukuHelper.checkBinder() } catch (_: Exception) { false }
-        val permOk   = try { ShizukuHelper.checkPermission() } catch (_: Exception) { false }
-        val s        = binderOk && permOk
+        val s        = ShizukuHelper.isBackendReady()
         val c        = wc(context)
 
         provideContent { GlanceTheme { Root(r, s, binderOk, c) } }
@@ -206,9 +203,7 @@ class GamaToggleWidget : GlanceAppWidget() {
         val p = context.getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
 
         val r: String = try {
-            val binderOk = ShizukuHelper.checkBinder()
-            val permOk   = ShizukuHelper.checkPermission()
-            if (binderOk && permOk) {
+            if (ShizukuHelper.isBackendReady() || ShizukuHelper.refreshRootAvailability()) {
                 val detected = withContext(Dispatchers.IO) { ShizukuHelper.getCurrentRenderer() }
                 if (detected != "Unknown") {
                     p.edit().putString("last_renderer", detected).apply()
@@ -224,8 +219,7 @@ class GamaToggleWidget : GlanceAppWidget() {
         }
 
         val binderOk = try { ShizukuHelper.checkBinder() } catch (_: Exception) { false }
-        val permOk   = try { ShizukuHelper.checkPermission() } catch (_: Exception) { false }
-        val s        = binderOk && permOk
+        val s        = ShizukuHelper.isBackendReady()
         val c        = wc(context)
 
         provideContent {
@@ -746,7 +740,7 @@ class WidgetActionCallback : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val action = parameters[KEY_ACT] ?: return
         val prefs  = context.getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
-        val ready  = try { ShizukuHelper.checkBinder() && ShizukuHelper.checkPermission() } catch (_: Exception) { false }
+        val ready  = try { ShizukuHelper.isBackendReady() || ShizukuHelper.refreshRootAvailability() } catch (_: Exception) { false }
         if (!ready) {
             context.startActivity(Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP

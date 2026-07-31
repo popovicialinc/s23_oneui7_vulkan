@@ -61,23 +61,19 @@ class VulkanTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
-        if (!ShizukuHelper.checkBinder()) {
-            setTile(Tile.STATE_INACTIVE, applicationContext.tileStr("tile","state_shizuku_not_running","Shizuku not running"))
-            return
-        }
-        if (!ShizukuHelper.checkPermission()) {
-            setTile(Tile.STATE_INACTIVE, applicationContext.tileStr("tile","state_permission_needed","Permission needed"))
-            return
-        }
-
-        setTile(Tile.STATE_ACTIVE, applicationContext.tileStr("tile","state_switching","Switching…"))
-
         val prefs       = getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
         val aggressive  = prefs.getBoolean("aggressive_mode", false)
         val killLauncher = prefs.getBoolean("kill_launcher", false)
         val excluded    = prefs.getStringSet("excluded_apps", emptySet()) ?: emptySet()
 
         scope.launch {
+            if (!ShizukuHelper.isBackendReady() && !ShizukuHelper.refreshRootAvailability()) {
+                setTile(Tile.STATE_INACTIVE, applicationContext.tileStr("tile","state_shizuku_not_running","Shizuku not running"))
+                return@launch
+            }
+
+            setTile(Tile.STATE_ACTIVE, applicationContext.tileStr("tile","state_switching","Switching…"))
+
             try {
                 ShizukuHelper.runVulkanSuspend(
                     context        = applicationContext,

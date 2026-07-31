@@ -102,7 +102,7 @@ fun VisualEffectsPanel(
         oledMode = oledMode, colors = colors
     ) { scrollState ->
         CleanTitle(
-            text = LocalStrings.current["particles.appearance_title"].ifEmpty { "APPEARANCE" },
+            text = LocalStrings.current["particles.appearance_title"].ifEmpty { "VISUALS" },
             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
             colors = colors, scrollOffset = scrollState.value
         )
@@ -472,8 +472,6 @@ fun RendererPanel(
     onKillLauncherChange: (Boolean) -> Unit,
     killKeyboard: Boolean,
     onKillKeyboardChange: (Boolean) -> Unit,
-    dozeMode: Boolean,
-    onDozeModeChange: (Boolean) -> Unit,
     showGpuWatchButton: Boolean,
     onShowGpuWatchButtonChange: (Boolean) -> Unit,
     onShowAggressiveWarning: () -> Unit,
@@ -490,7 +488,6 @@ fun RendererPanel(
         visible = visible, onDismiss = onDismiss,
         isLandscape = isLandscape, isSmallScreen = isSmallScreen,
         oledMode = oledMode, colors = colors,
-        rootExitCascade = true,
     ) { _ ->
         CleanTitle(
             text = LocalStrings.current["renderer.title"].ifEmpty { "RENDERER" },
@@ -498,7 +495,7 @@ fun RendererPanel(
             colors = colors
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
             ToggleCard(
                 title = LocalStrings.current["renderer.aggressive_mode"].ifEmpty { "AGGRESSIVE MODE" },
                 description = LocalStrings.current["renderer.aggressive_mode_desc"].ifEmpty { "Applies the renderer to every installed package — broader coverage, but read the warning before enabling" },
@@ -509,10 +506,10 @@ fun RendererPanel(
                 accentBorder = true
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
             ToggleCard(
                 title = LocalStrings.current["renderer.kill_launcher"].ifEmpty { "RESTART LAUNCHER ON SWITCH" },
-                description = LocalStrings.current["renderer.kill_launcher_desc"].ifEmpty { "Force-stops the launcher after switching so it picks up the new renderer immediately — leave off on Xiaomi / MIUI" },
+                description = LocalStrings.current["renderer.kill_launcher_desc"].ifEmpty { "Restarts the launcher and System UI after switching so the new renderer applies to the system chrome too — leave off on Xiaomi / MIUI" },
                 checked = killLauncher,
                 onCheckedChange = { performHaptic(); onKillLauncherChange(it) },
                 colors = colors, cardBackground = cardBackground,
@@ -520,7 +517,7 @@ fun RendererPanel(
                 accentBorder = true
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
             ToggleCard(
                 title = LocalStrings.current["renderer.kill_keyboard"].ifEmpty { "RESTART KEYBOARD ON SWITCH" },
                 description = LocalStrings.current["renderer.kill_keyboard_desc"].ifEmpty { "Force-stops the currently selected keyboard after applying the renderer, so it reloads with the new graphics API" },
@@ -531,18 +528,7 @@ fun RendererPanel(
                 accentBorder = true
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
-            ToggleCard(
-                title = LocalStrings.current["renderer.doze_mode"].ifEmpty { "DOZE" },
-                description = LocalStrings.current["renderer.doze_mode_desc"].ifEmpty { "Puts the device into deep sleep immediately — squeezes extra battery life when you're not using it" },
-                checked = dozeMode,
-                onCheckedChange = { performHaptic(); onDozeModeChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                accentBorder = true
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4) {
             ToggleCard(
                 title = LocalStrings.current["renderer.show_gpuwatch_toggle"].ifEmpty { "GPUWATCH SHORTCUT" },
                 description = LocalStrings.current["renderer.show_gpuwatch_desc"].ifEmpty { "Adds an Open GPUWatch button on the main screen. Samsung devices only." },
@@ -584,7 +570,7 @@ fun MatrixSettingsPanel(
         oledMode = oledMode, colors = colors
     ) { _ ->
         CleanTitle(
-            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX SETTINGS" },
+            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX\nSETTINGS" },
             fontSize = if (isLandscape) ts.displaySmall else ts.displayMedium,
             colors   = colors
         )
@@ -598,7 +584,7 @@ fun MatrixSettingsPanel(
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
             Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
                 SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.appearance_title"].ifEmpty { "GLYPH SETTINGS" },
+                    title       = LocalStrings.current["particles.glyph_settings"].ifEmpty { "GLYPH SETTINGS" },
                     description = LocalStrings.current["matrix.appearance_desc"].ifEmpty {
                         "Glyph font size and background opacity"
                     },
@@ -654,7 +640,7 @@ fun MatrixAppearancePanel(
         oledMode = oledMode, colors = colors
     ) { _ ->
         CleanTitle(
-            text     = LocalStrings.current["particles.appearance_title"].ifEmpty { "GLYPH SETTINGS" },
+            text     = LocalStrings.current["particles.glyph_settings"].ifEmpty { "GLYPH\nSETTINGS" },
             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
             colors   = colors
         )

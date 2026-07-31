@@ -52,7 +52,8 @@ class BootRendererWorker(
 
         // Poll up to 90 s on this attempt — longer than the old 60 s goAsync window
         // and within the WorkManager execution budget (10 min default).
-        val shizukuReady = waitForShizuku(timeoutMs = 90_000L)
+        // Root is checked first — it works even before Shizuku's daemon settles.
+        val shizukuReady = ShizukuHelper.refreshRootAvailability() || waitForShizuku(timeoutMs = 90_000L)
 
         if (!shizukuReady) {
             // Not ready yet — if we still have retries, WorkManager will reschedule.

@@ -142,7 +142,7 @@ fun WarningDialog(
                     fontSize = ts.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
-                    color = colors.textPrimary,
+                    color = colors.primaryAccent,
                     textAlign = TextAlign.Center
                 )
 
@@ -194,9 +194,7 @@ fun AggressiveWarningDialog(
     isSmallScreen: Boolean,
     colors: ThemeColors,
     cardBackground: Color,
-    oledMode: Boolean = false, // Added
-    dontShowAgain: Boolean = false,
-    onDontShowAgainChange: (Boolean) -> Unit = {}
+    oledMode: Boolean = false // Added
 ) {
     val ts = LocalTypeScale.current
     // Dialog Content - relies on main blur system (showAggressiveWarning is in anyPanelOpen)
@@ -213,7 +211,7 @@ fun AggressiveWarningDialog(
                     .fillMaxWidth(0.9f)
                     .widthIn(max = 500.dp)
                     .directionalShadow(cornerRadius = 28.dp)
-                    .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(40.dp))
+                    .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(28.dp))
                     .pointerInput(Unit) { /* Consume taps */ },
                 colors = CardDefaults.cardColors(containerColor = cardBackground),
                 shape = RoundedCornerShape(28.dp),
@@ -223,14 +221,17 @@ fun AggressiveWarningDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(if (isSmallScreen) 24.dp else 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = LocalStrings.current["dialogs.aggressive_title"].ifEmpty { "Aggressive Mode Warning ⚠️" },
+                        text = LocalStrings.current["dialogs.aggressive_title"].ifEmpty { "AGGRESSIVE MODE" },
                         fontSize = ts.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         fontFamily = quicksandFontFamily,
-                        color = colors.primaryAccent
+                        color = colors.primaryAccent,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Text(
@@ -249,13 +250,13 @@ fun AggressiveWarningDialog(
                             Text("🛑", fontSize = ts.buttonLarge)
                             Column {
                                 Text(
-                                    "Resets Defaults",
+                                    LocalStrings.current["dialogs.aggressive_warning_1_title"].ifEmpty { "Resets Defaults" },
                                     fontWeight = FontWeight.Bold,
                                     color = colors.textPrimary,
                                     fontFamily = quicksandFontFamily
                                 )
                                 Text(
-                                    "Your default browser and keyboard will be reset",
+                                    LocalStrings.current["dialogs.aggressive_warning_1_body"].ifEmpty { "Your default browser and keyboard will be reset" },
                                     fontSize = ts.labelMedium,
                                     color = colors.textSecondary,
                                     fontFamily = quicksandFontFamily,
@@ -271,13 +272,13 @@ fun AggressiveWarningDialog(
                             Text("📵", fontSize = ts.buttonLarge)
                             Column {
                                 Text(
-                                    "Connectivity Issues",
+                                    LocalStrings.current["dialogs.aggressive_warning_2_title"].ifEmpty { "Connectivity Issues" },
                                     fontWeight = FontWeight.Bold,
                                     color = colors.textPrimary,
                                     fontFamily = quicksandFontFamily
                                 )
                                 Text(
-                                    "Loss of WiFi-Calling/VoLTE capability. Fix: Settings → Connections → SIM manager, toggle SIM off and back on",
+                                    LocalStrings.current["dialogs.aggressive_warning_2_body"].ifEmpty { "Loss of WiFi-Calling/VoLTE capability. Fix: Settings → Connections → SIM manager, toggle SIM off and back on" },
                                     fontSize = ts.labelMedium,
                                     color = colors.textSecondary,
                                     fontFamily = quicksandFontFamily,
@@ -294,28 +295,16 @@ fun AggressiveWarningDialog(
                             Text("☠️", fontSize = ts.buttonLarge)
                             Column {
                                 Text(
-                                    "... and other stuff we haven't yet documented",
+                                    LocalStrings.current["dialogs.aggressive_warning_3_title"].ifEmpty { "... and other stuff we haven't yet documented" },
                                     fontWeight = FontWeight.Bold,
                                     color = colors.primaryAccent, // Accented color
                                     fontFamily = quicksandFontFamily
                                 )
                                 Text(
-                                    "ARE YOU CERTAIN WHATEVER YOU'RE DOING IS WORTH IT?",
+                                    LocalStrings.current["dialogs.aggressive_warning_3_body"].ifEmpty { "ARE YOU CERTAIN WHATEVER YOU'RE DOING IS WORTH IT?" },
                                     fontSize = ts.labelMedium,
                                     color = colors.textSecondary,
                                     fontFamily = quicksandFontFamily,
-                                    fontWeight = FontWeight.Bold
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Text(
-                                    "This mode is NOT recommended. If you're just pushing buttons to see what they do, don't mess with this.",
-                                    fontSize = ts.labelMedium,
-                                    color = colors.textSecondary,
-                                    fontFamily = quicksandFontFamily,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth(),
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -323,32 +312,17 @@ fun AggressiveWarningDialog(
 
                     }
 
-                    // "Don't show again" checkbox
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onDontShowAgainChange(!dontShowAgain) }
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Checkbox(
-                            checked = dontShowAgain,
-                            onCheckedChange = { onDontShowAgainChange(it) },
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = colors.primaryAccent,
-                                uncheckedColor = colors.textSecondary
-                            )
-                        )
-                        Text(
-                            text = LocalStrings.current["dialogs.aggressive_dont_show_again"].ifEmpty { "Don't show this warning again" },
-                            fontSize = ts.bodyMedium,
-                            color = colors.textSecondary,
-                            fontFamily = quicksandFontFamily,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    // Full-width warning — sits outside the emoji rows so it spans
+                    // the whole popup width instead of the row's narrow column.
+                    Text(
+                        LocalStrings.current["dialogs.aggressive_warning_3_footer"].ifEmpty { "This mode is NOT recommended. If you're just pushing buttons to see what they do, don't mess with this." },
+                        fontSize = ts.labelMedium,
+                        color = colors.textSecondary,
+                        fontFamily = quicksandFontFamily,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        fontWeight = FontWeight.Bold
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -416,12 +390,12 @@ fun GPUWatchConfirmDialog(
                     fontSize = ts.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
-                    color = colors.textPrimary,
+                    color = colors.primaryAccent,
                     textAlign = TextAlign.Center
                 )
 
                 Text(
-                    text = LocalStrings.current["dialogs.gpuwatch_body"].ifEmpty { "GAMA cannot open GPUWatch directly. It will open Developer Options, where you can enable GPUWatch yourself." },
+                    text = LocalStrings.current["dialogs.gpuwatch_body"].ifEmpty { "GAMA can't open GPUWatch directly. You will be taken to Developer Options where you can find and enable 'GPUWatch' yourself." },
                     fontSize = ts.bodyLarge,
                     color = colors.textSecondary,
                     fontFamily = quicksandFontFamily,

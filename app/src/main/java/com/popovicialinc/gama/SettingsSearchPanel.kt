@@ -438,8 +438,6 @@ fun SettingsSearchPanel(
     onKillLauncherChange: (Boolean) -> Unit,
     killKeyboard: Boolean,
     onKillKeyboardChange: (Boolean) -> Unit,
-    dozeMode: Boolean,
-    onDozeModeChange: (Boolean) -> Unit,
     showGpuWatchButton: Boolean,
     onShowGpuWatchButtonChange: (Boolean) -> Unit,
     // ── System / App ──────────────────────────────────────────────────────────
@@ -582,7 +580,7 @@ fun SettingsSearchPanel(
     fun trPath(vararg parts: String): String = parts.joinToString(" → ")
 
     val pathSettings = tr("settings.title", "SETTINGS")
-    val pathAppearance = tr("settings.appearance", "APPEARANCE")
+    val pathAppearance = tr("settings.appearance", "VISUALS")
     val pathEffects = tr("effects.title", "EFFECTS")
     val pathColors = tr("colors.title", "COLORS")
     val pathParticles = tr("particles.title", "PARTICLES")
@@ -624,7 +622,7 @@ fun SettingsSearchPanel(
         ) {
             Column {
                 SettingsNavigationCard(
-                    title = strings["settings.appearance"].ifEmpty { "APPEARANCE" },
+            title = strings["settings.appearance"].ifEmpty { "VISUALS" },
                     description = strings["text_catalog.theme_color_effects_particles_and_visual_behavior"].ifEmpty { "Theme, color, effects, particles, and visual behavior." },
                     onClick = { openSearchDestination(onAppearanceClick) },
                     isSmallScreen = isSmallScreen, colors = colors,
@@ -1826,29 +1824,6 @@ fun SettingsSearchPanel(
             }
         },
         SettingsSearchItem(
-            id = "doze",
-            title = tr("renderer.doze_mode", "DOZE"),
-            keywords = listOf("doze", "sleep", "deep sleep", "battery", "power", "idle", "standby", "aggressive doze"),
-            path = pathRenderer
-        ) {
-            Column {
-                ToggleCard(
-                    title = tr("renderer.doze_mode", "DOZE"),
-                    description = tr(
-                        "renderer.doze_mode_desc",
-                        "Puts the device into deep sleep immediately — squeezes extra battery life when you're not using it"
-                    ),
-                    checked = dozeMode,
-                    onCheckedChange = { performHaptic(); onDozeModeChange(it) },
-                    colors = colors,
-                    cardBackground = cardBackground,
-                    isSmallScreen = isSmallScreen,
-                    oledMode = oledMode,
-                    accentBorder = true
-                )
-            }
-        },
-        SettingsSearchItem(
             id = "gpuwatch_shortcut",
             title = tr("text_catalog.gpuwatch_shortcut", "GPUWATCH SHORTCUT"),
             keywords = listOf("gpuwatch", "gpu watch", "samsung", "shortcut", "gpu", "button", "monitor", "overlay"),
@@ -2287,7 +2262,7 @@ fun SettingsSearchPanel(
                     ) {
                         SettingsNavigationCard(
                             title = strings["search.no_results"].ifEmpty { "NO RESULTS" },
-                            description = strings["search.no_results_desc"].ifEmpty { "Try: blur, theme, dark, matrix, particles, doze, aggressive, notifications, gradient…" },
+                            description = strings["search.no_results_desc"].ifEmpty { "Try: blur, theme, dark, matrix, particles, aggressive, notifications, gradient…" },
                             onClick = {},
                             isSmallScreen = isSmallScreen,
                             colors = colors,

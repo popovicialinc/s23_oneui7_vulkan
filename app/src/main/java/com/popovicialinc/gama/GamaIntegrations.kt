@@ -214,14 +214,14 @@ fun IntegrationsPanel(
                                 val tileAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
                                 IntegrationInfoCard(
                                     title = LocalStrings.current["integrations.qs_tiles"].ifEmpty { "QUICK SETTINGS TILES" },
-                                    description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "Three tiles: Vulkan, OpenGL, and Doze. Each one lights up when active and switches instantly on tap, no menu needed" },
-                                    statusLabel = if (tileAvailable) "3 tiles available" else "Requires Android 7+",
+                                    description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "Two tiles: Vulkan and OpenGL. Each one lights up when active and switches instantly on tap, no menu needed" },
+                                    statusLabel = if (tileAvailable) "2 tiles available" else "Requires Android 7+",
                                     statusOk = tileAvailable,
                                     actionLabel = if (tileAvailable) "How to add" else null,
                                     onAction = if (tileAvailable) ({
                                         onInfoRequested(
                                             "Adding QS Tiles",
-                                            "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan, OpenGL, and Doze. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
+                                            "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan and OpenGL. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
                                         )
                                     }) else null,
                                     colors = colors,
@@ -259,14 +259,14 @@ fun IntegrationsPanel(
                         val tileAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
                         IntegrationInfoCard(
                             title = LocalStrings.current["integrations.qs_tiles"].ifEmpty { "QUICK SETTINGS TILES" },
-                            description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "Three tiles: Vulkan, OpenGL, and Doze. Each one lights up when active and switches instantly on tap, no menu needed" },
-                            statusLabel = if (tileAvailable) "3 tiles available" else "Requires Android 7+",
+                            description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "Two tiles: Vulkan and OpenGL. Each one lights up when active and switches instantly on tap, no menu needed" },
+                            statusLabel = if (tileAvailable) "2 tiles available" else "Requires Android 7+",
                             statusOk = tileAvailable,
                             actionLabel = if (tileAvailable) "How to add" else null,
                             onAction = if (tileAvailable) ({
                                 onInfoRequested(
                                     "Adding QS Tiles",
-                                    "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan, OpenGL, and Doze. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
+                                    "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan and OpenGL. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
                                 )
                             }) else null,
                             colors = colors,

@@ -100,4 +100,130 @@ import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.roundToInt
 
+// ── RootAccessDialog — shown when no backend is ready, offers Shizuku or root ─
+@Composable
+fun RootAccessDialog(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onUseShizuku: () -> Unit,
+    onUseRoot: () -> Unit,
+    isSmallScreen: Boolean,
+    isLandscape: Boolean,
+    isTablet: Boolean,
+    colors: ThemeColors,
+    cardBackground: Color
+) {
+    val ts = LocalTypeScale.current
+    BouncyDialog(visible = visible, onDismiss = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(if (isLandscape && !isTablet) 0.6f else 0.9f)
+                .widthIn(max = 500.dp)
+                .directionalShadow(cornerRadius = 28.dp)
+                .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(28.dp))
+                .pointerInput(Unit) { detectTapGestures { } },
+            colors = CardDefaults.cardColors(containerColor = cardBackground),
+            shape = RoundedCornerShape(28.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(if (isSmallScreen) 22.dp else 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 20.dp else 24.dp)
+            ) {
+                // Terminal prompt icon
+                Canvas(modifier = Modifier.size(if (isSmallScreen) 56.dp else 64.dp)) {
+                    val strokeWidth = 3.dp.toPx()
+                    val cornerRadius = 12.dp.toPx()
+                    val color = colors.primaryAccent
+                    // Terminal window frame
+                    drawRoundRect(
+                        color = color,
+                        topLeft = Offset(size.width * 0.15f, size.height * 0.2f),
+                        size = Size(size.width * 0.7f, size.height * 0.6f),
+                        cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+                        style = Stroke(width = strokeWidth)
+                    )
+                    // Header line
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width * 0.15f, size.height * 0.35f),
+                        end = Offset(size.width * 0.85f, size.height * 0.35f),
+                        strokeWidth = strokeWidth
+                    )
+                    // Root prompt "$" before cursor
+                    val promptPath = Path().apply {
+                        moveTo(size.width * 0.25f, size.height * 0.52f)
+                        lineTo(size.width * 0.32f, size.height * 0.58f)
+                        lineTo(size.width * 0.25f, size.height * 0.64f)
+                    }
+                    drawPath(
+                        path = promptPath,
+                        color = color,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                    // Cursor line
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width * 0.37f, size.height * 0.58f),
+                        end = Offset(size.width * 0.72f, size.height * 0.58f),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
+                }
+
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = LocalStrings.current["dialogs.root_title"].ifEmpty { "Choose your access method" },
+                        fontSize = ts.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = quicksandFontFamily,
+                        color = colors.primaryAccent
+                    )
+                }
+
+                Text(
+                    text = LocalStrings.current["dialogs.root_body"].ifEmpty { "GAMA needs shell access to switch the renderer. Grant it via Shizuku, or — if your device is rooted — use the root backend (Magisk / KernelSU)." },
+                    fontSize = ts.bodyLarge,
+                    lineHeight = (ts.bodyLarge.value * 1.4f).sp,
+                    color = colors.textPrimary.copy(alpha = 0.85f),
+                    modifier = Modifier.fillMaxWidth(),
+                    fontFamily = quicksandFontFamily,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DialogButton(
+                        text = LocalStrings.current["dialogs.btn_use_shizuku"].ifEmpty { "Use Shizuku" },
+                        onClick = onUseShizuku,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = true
+                    )
+                    DialogButton(
+                        text = LocalStrings.current["dialogs.btn_use_root"].ifEmpty { "Use Root (su)" },
+                        onClick = onUseRoot,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = false
+                    )
+                    DialogButton(
+                        text = LocalStrings.current["dialogs.btn_cancel"].ifEmpty { "Cancel" },
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = false
+                    )
+                }
+            }
+        }
+    }
+}
+
 

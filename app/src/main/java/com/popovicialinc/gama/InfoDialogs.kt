@@ -112,12 +112,22 @@ fun ShizukuHelpDialog(
     isLandscape: Boolean,
     isTablet: Boolean,
     colors: ThemeColors,
-    cardBackground: Color
+    cardBackground: Color,
+    rootAvailable: Boolean = false
 ) {
     val ts = LocalTypeScale.current
     val dialogBorderAlpha = 0.55f  // matches SettingsNavigationCard (APPEARANCE button)
     val dialogBorderWidth = 1.dp
     val dialogShape = RoundedCornerShape(40.dp)
+    val context = LocalContext.current
+    // Shizuku already on this device? Decides whether the primary action is
+    // "download & install" or "open the app". Updated to true once a download
+    // completes, so the panel transitions to the "installed" view on the spot.
+    var shizukuInstalled by remember {
+        mutableStateOf(
+            runCatching { context.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0) }.isSuccess
+        )
+    }
 
     BouncyDialog(visible = visible, onDismiss = onDismiss) {
     Card(
@@ -140,17 +150,18 @@ fun ShizukuHelpDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(if (isSmallScreen) 22.dp else 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 18.dp else 22.dp)
+            verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 14.dp else 18.dp)
         ) {
-            // Title — accent-coloured, matches ExternalLinkConfirmDialog
+            // ── Title — accent-coloured, matches ExternalLinkConfirmDialog ──
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (helpType == "not_running") "Shizuku Not Running" else "Permission Needed",
+                    text = if (helpType == "not_running") "Shizuku isn't running" else "Permission Needed",
                     fontSize = ts.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
@@ -158,34 +169,277 @@ fun ShizukuHelpDialog(
                 )
             }
 
+            // ── One-line intro — what the user needs to do, in a nutshell ──
             Text(
-                text = when (helpType) {
-                    "not_running" -> "Shizuku needs to be running for GAMA to work.\n\n1. Open the Shizuku app\n2. Tap 'Start' to activate the service\n3. Return to GAMA\n\nIf Shizuku won't start, follow the wireless debugging instructions in the Shizuku app."
-                    "permission" -> "GAMA needs permission to use Shizuku.\n\n1. Open Shizuku\n2. Tap 'Authorized application'\n3. Find GAMA and enable it\n4. Close GAMA from your recents\n5. Reopen GAMA\n"
-                    else -> "Unknown error"
-                },
-                fontSize = ts.bodyLarge,
-                lineHeight = (ts.bodyLarge.value * 1.4f).sp,
-                color = colors.textPrimary.copy(alpha = 0.85f),
+                text = if (helpType == "not_running")
+                    "GAMA needs the Shizuku service running to switch the renderer."
+                else
+                    "GAMA is installed, but hasn't been authorized in Shizuku yet.",
+                fontSize = ts.bodyMedium,
+                lineHeight = (ts.bodyMedium.value * 1.4f).sp,
+                color = colors.textSecondary,
                 fontFamily = quicksandFontFamily,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Button border uses the same accent alpha as the card outline for consistency
+            if (helpType == "not_running") {
+                // ── Primary action: download (missing) or open (installed) ──
+                if (!shizukuInstalled) {
+                    val scope = rememberCoroutineScope()
+                    var installPhase by remember { mutableStateOf(0) } // 0 idle · 1 consent · 2 downloading · 3 installing · 4 installed · -1 failed
+                    var installProgress by remember { mutableStateOf(0f) }
+                    var installError by remember { mutableStateOf("") }
+
+                    // First tap asks for explicit consent: the APK comes straight
+                    // from GitHub and installs outside F-Droid's review. Required by
+                    // F-Droid's inclusion policy (opt-in, clearly explained).
+                    val consentText = LocalStrings.current["dialogs.shizuku_download_consent"]
+                        .ifEmpty { "This downloads the Shizuku APK from GitHub and installs it directly, bypassing F-Droid's checks. Continue?" }
+
+                    val installLabel = when {
+                        installPhase == 1 -> LocalStrings.current["dialogs.shizuku_downloading"]
+                            .ifEmpty { "Downloading Shizuku… %s%" }
+                            .replace("%s", ((installProgress * 100).toInt()).toString())
+                        installPhase == 2 -> LocalStrings.current["dialogs.shizuku_installing"]
+                            .ifEmpty { "Installing Shizuku…" }
+                        installPhase == -1 -> LocalStrings.current["dialogs.btn_retry"].ifEmpty { "Retry download" }
+                        else -> LocalStrings.current["dialogs.btn_download_shizuku"]
+                            .ifEmpty { "Download & install Shizuku" }
+                    }
+                    val downloadFailedText = LocalStrings.current["dialogs.shizuku_download_failed"]
+                        .ifEmpty { "Download failed. Check your connection and try again." }
+
+                    // Shared download + install pipeline — called by the consent
+                    // Continue button and by Retry after a failure.
+                    val startDownload: () -> Unit = {
+                        installPhase = 1
+                        installProgress = 0f
+                        installError = ""
+                        scope.launch {
+                            val result = ShizukuInstaller.downloadLatestApk(context) { p ->
+                                installProgress = p
+                            }
+                            if (result.apkFile == null) {
+                                installPhase = -1
+                                installError = result.error.ifBlank { downloadFailedText }
+                                return@launch
+                            }
+                            installPhase = 2
+                            when (val installResult = ShizukuInstaller.installApk(context, result.apkFile)) {
+                                is InstallResult.Installed -> {
+                                    shizukuInstalled = true
+                                    installPhase = 3
+                                }
+                                is InstallResult.Cancelled -> {
+                                    installPhase = 0
+                                }
+                                is InstallResult.Failed -> {
+                                    installPhase = -1
+                                    installError = installResult.reason
+                                }
+                            }
+                        }
+                    }
+
+                    if (installPhase == 0) {
+                        DialogButton(
+                            text = installLabel,
+                            onClick = { installPhase = 4 },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = colors,
+                            cardBackground = cardBackground,
+                            accent = true,
+                            borderAlphaOverride = dialogBorderAlpha
+                        )
+                    } else if (installPhase == 4) {
+                        Text(
+                            text = consentText,
+                            fontSize = ts.bodySmall,
+                            lineHeight = (ts.bodySmall.value * 1.3f).sp,
+                            color = colors.textSecondary,
+                            fontFamily = quicksandFontFamily,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            DialogButton(
+                                text = LocalStrings.current["dialogs.btn_cancel"].ifEmpty { "Cancel" },
+                                onClick = { installPhase = 0 },
+                                modifier = Modifier.weight(1f),
+                                colors = colors,
+                                cardBackground = cardBackground,
+                                accent = false,
+                                borderAlphaOverride = dialogBorderAlpha
+                            )
+                            DialogButton(
+                                text = LocalStrings.current["dialogs.btn_continue"].ifEmpty { "Continue" },
+                                onClick = startDownload,
+                                modifier = Modifier.weight(1f),
+                                colors = colors,
+                                cardBackground = cardBackground,
+                                accent = true,
+                                borderAlphaOverride = dialogBorderAlpha
+                            )
+                        }
+                    } else {
+                        DialogButton(
+                            text = installLabel,
+                            onClick = {
+                                if (installPhase == 1 || installPhase == 2) return@DialogButton
+                                startDownload()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = colors,
+                            cardBackground = cardBackground,
+                            accent = true,
+                            borderAlphaOverride = dialogBorderAlpha
+                        )
+                    }
+
+                    if (installPhase == -1 && installError.isNotEmpty()) {
+                        Text(
+                            text = installError,
+                            fontSize = ts.bodySmall,
+                            lineHeight = (ts.bodySmall.value * 1.3f).sp,
+                            color = Color(0xFFEF5350),
+                            fontFamily = quicksandFontFamily,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                // ── Steps — numbered, so the path is obvious ──
+                DialogSectionLabel("How to start Shizuku", colors = colors)
+                if (!shizukuInstalled) {
+                    DialogStepRow(1, "Install Shizuku with the button above", colors = colors)
+                    DialogStepRow(2, "Open Shizuku and tap \"Start\"", colors = colors)
+                    DialogStepRow(3, "Come back to GAMA", colors = colors)
+                } else {
+                    DialogStepRow(1, "Tap \"Start\" inside the Shizuku app", colors = colors)
+                    DialogStepRow(2, "Come back to GAMA", colors = colors)
+                }
+
+                if (shizukuInstalled) {
+                    DialogButton(
+                        text = LocalStrings.current["dialogs.btn_open_shizuku"].ifEmpty { "Open Shizuku" },
+                        onClick = {
+                            context.packageManager
+                                .getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                ?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = true,
+                        borderAlphaOverride = dialogBorderAlpha
+                    )
+                }
+
+                // ── Troubleshooting footnote ──
+                Text(
+                    text = "Shizuku won't start? Follow the wireless debugging instructions inside the Shizuku app.",
+                    fontSize = ts.bodySmall,
+                    lineHeight = (ts.bodySmall.value * 1.3f).sp,
+                    color = colors.textSecondary,
+                    fontFamily = quicksandFontFamily,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                // ── "Permission Needed" — same numbered-step treatment ──
+                DialogSectionLabel("Authorize GAMA", colors = colors)
+                DialogStepRow(1, "Open the Shizuku app", colors = colors)
+                DialogStepRow(2, "Tap \"Authorized applications\"", colors = colors)
+                DialogStepRow(3, "Enable GAMA", colors = colors)
+                DialogStepRow(4, "Reopen GAMA from your recents", colors = colors)
+            }
+
+            // ── Root alternative — only relevant when neither backend is ready ──
+            if (!rootAvailable) {
+                Text(
+                    text = "Device rooted? GAMA also works with root access (Magisk / KernelSU) — no Shizuku needed.",
+                    fontSize = ts.bodySmall,
+                    lineHeight = (ts.bodySmall.value * 1.3f).sp,
+                    color = colors.textSecondary,
+                    fontFamily = quicksandFontFamily,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // ── Dismiss — secondary so the download/open action stays primary ──
             DialogButton(
                 text = LocalStrings.current["dialogs.btn_okay"].ifEmpty { "Okay" },
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
                 colors = colors,
                 cardBackground = cardBackground,
-                accent = true,
+                accent = false,
                 borderAlphaOverride = dialogBorderAlpha
             )
         }
     }
     } // BouncyDialog
+}
+
+// ── Small section header used inside the Shizuku help dialogs ───────────────
+@Composable
+private fun DialogSectionLabel(text: String, colors: ThemeColors) {
+    val ts = LocalTypeScale.current
+    Text(
+        text = text,
+        fontSize = ts.headlineSmall,
+        fontWeight = FontWeight.Bold,
+        fontFamily = quicksandFontFamily,
+        color = colors.primaryAccent,
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+// ── Numbered instruction row: circled step number + short text ──────────────
+@Composable
+private fun DialogStepRow(step: Int, text: String, colors: ThemeColors) {
+    val ts = LocalTypeScale.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(colors.primaryAccent.copy(alpha = 0.14f))
+                .border(1.dp, colors.primaryAccent.copy(alpha = 0.5f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = step.toString(),
+                fontSize = ts.bodySmall,
+                fontWeight = FontWeight.Bold,
+                fontFamily = quicksandFontFamily,
+                color = colors.primaryAccent
+            )
+        }
+        Text(
+            text = text,
+            fontSize = ts.bodyMedium,
+            color = colors.textPrimary.copy(alpha = 0.9f),
+            fontFamily = quicksandFontFamily,
+            fontWeight = FontWeight.Bold
+        )
+    }
 }
 
 @Composable

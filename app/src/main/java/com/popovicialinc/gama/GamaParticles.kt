@@ -49,7 +49,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
@@ -198,8 +197,7 @@ data class ParticleState(
 data class CelestialState(
     val x: Float,
     val y: Float,
-    val size: Float,
-    val alpha: Float
+    val size: Float
 )
 
 // Function to calculate current celestial position based on real time
@@ -254,8 +252,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 48f,  // Slightly larger sun
-                alpha = 0.75f  // More visible
+                size = 48f  // Slightly larger sun
             )
         }
 
@@ -268,8 +265,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 48f,
-                alpha = 0.75f * progress // Fade in
+                size = 48f
             )
         }
 
@@ -282,8 +278,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 48f,
-                alpha = 0.75f * (1f - progress) // Fade out
+                size = 48f
             )
         }
 
@@ -313,8 +308,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 42f,
-                alpha = 0.65f  // Slightly more visible
+                size = 42f
             )
         }
 
@@ -327,8 +321,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 42f,
-                alpha = 0.65f * progress // Fade in
+                size = 42f
             )
         }
 
@@ -341,8 +334,7 @@ fun calculateCelestialPosition(screenWidth: Float, screenHeight: Float, timeOffs
             CelestialState(
                 x = x,
                 y = y,
-                size = 42f,
-                alpha = 0.65f * (1f - progress) // Fade out
+                size = 42f
             )
         }
 
@@ -400,11 +392,10 @@ fun ParticlesOverlay(
     starMode: Boolean = false, // Star mode toggle
     timeModeEnabled: Boolean = false, // Time-based sun & moon system
     timeOffsetHours: Float = 0f, // Developer: hours to add to current time
-    anyPanelOpen: Boolean = false, // Hide celestials when panels are open
+    blurRadius: Dp = 0.dp, // Panel blur radius — animated in lock-step with the main content blur
     isLandscape: Boolean = false, // NEW: Constrain celestials to left half in landscape
     nativeRefreshRate: Boolean = false, // true = render every vsync; false = skip every other (default, saves battery)
-    quarterRefreshRate: Boolean = false,  // true = render at 1/4 native rate; only applies when nativeRefreshRate is false
-    celestialDarkMode: Boolean = true // dark/OLED keeps accent celestials; light mode uses subtle black celestials
+    quarterRefreshRate: Boolean = false  // true = render at 1/4 native rate; only applies when nativeRefreshRate is false
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -428,15 +419,12 @@ fun ParticlesOverlay(
         label = "particles_render_color"
     )
 
+    // The sun and moon use the RAW accent colour — no white blend (the particle
+    // colour is lerped 42% toward white; the celestials must stay true accent).
     val renderedCelestialColor by animateColorAsState(
-        targetValue = if (celestialDarkMode) renderedParticleColor else Color.Black,
+        targetValue = color,
         animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
         label = "celestial_render_color"
-    )
-    val celestialOpacityMultiplier by animateFloatAsState(
-        targetValue = if (celestialDarkMode) 1f else 0.58f,
-        animationSpec = tween(durationMillis = 620, easing = FastOutSlowInEasing),
-        label = "celestial_opacity"
     )
 
     // Celestial position — recomputed at most once per second via a tick counter.
@@ -854,20 +842,6 @@ fun ParticlesOverlay(
         label = "celestial_alpha"
     )
 
-    // Celestial blur: crossfade between sharp and blurred copies — mirrors the
-    // technique used for the main content blur in GamaUI.
-    //
-    // celestialBlurAlpha animates 0→1 when a panel opens, 1→0 when it closes.
-    // Two Canvas layers are composited: the sharp one fades OUT (1−alpha), the
-    // blurred one fades IN (alpha).  The GPU holds a fixed RenderEffect the whole
-    // time; only the layer alpha changes, which is essentially free.
-    val celestialBlurTarget = timeModeEnabled && anyPanelOpen
-    val celestialBlurAlpha by animateFloatAsState(
-        targetValue = if (celestialBlurTarget) 1f else 0f,
-        animationSpec = tween(durationMillis = 380, easing = MotionTokens.Easing.emphasized),
-        label = "celestial_blur_alpha"
-    )
-
     // remember blocks MUST be called unconditionally (Compose rules), so they live
     // outside the particleAlpha > 0.01f guard below.
     // Reusable paths and Paint objects — allocated once, never recreated.
@@ -1083,11 +1057,12 @@ fun ParticlesOverlay(
                 val cel = celestialState ?: return@drawLambda
                 val adjustedX = if (isLandscape) cel.x * 0.5f else cel.x
                 val isSun = frameIsDaytime
-                val effectiveAlpha = cel.alpha * celestialAlpha * celestialOpacityMultiplier
+                // Fully opaque — celestialAlpha only covers the enable/panel fade.
+                val effectiveAlpha = celestialAlpha
 
                 // Pre-compute base RGB int (alpha stripped) — same technique as the
-                // particle draw loop. In light mode the celestial object is black
-                // with reduced opacity; in dark/OLED it stays accent-colored.
+                // particle draw loop. The sun and moon are always 100% opaque and
+                // exactly the accent colour.
                 val colorRgb = renderedCelestialColor.toArgb() and 0x00FFFFFF
                 // Helper: assemble a Color from a pre-stripped RGB int + float alpha [0,1]
                 fun colorWithAlpha(alpha: Float): Color =
@@ -1143,21 +1118,7 @@ fun ParticlesOverlay(
                         // Single draw call for all 8 rays
                         drawPath(
                             path = reusableRayPath,
-                            color = colorWithAlpha(effectiveAlpha * 0.5f)
-                        )
-
-                        // Draw outer glow (largest)
-                        drawCircle(
-                            color = colorWithAlpha(effectiveAlpha * 0.15f),
-                            radius = cel.size * 2.0f,
-                            center = sunCenter
-                        )
-
-                        // Draw middle glow
-                        drawCircle(
-                            color = colorWithAlpha(effectiveAlpha * 0.3f),
-                            radius = cel.size * 1.4f,
-                            center = sunCenter
+                            color = colorWithAlpha(effectiveAlpha)
                         )
 
                         // Draw main sun body
@@ -1169,7 +1130,7 @@ fun ParticlesOverlay(
 
                         // Draw bright core
                         drawCircle(
-                            color = colorWithAlpha(effectiveAlpha * 0.9f),
+                            color = colorWithAlpha(effectiveAlpha),
                             radius = cel.size * 0.6f,
                             center = sunCenter
                         )
@@ -1180,23 +1141,7 @@ fun ParticlesOverlay(
                         val biteR = moonR * 0.82f
                         val biteCenter = Offset(moonCenter.x + moonR * 0.48f, moonCenter.y - moonR * 0.12f)
 
-                        // 1. Soft glow halo — single radial gradient drawCircle instead of 5 layered calls.
-                        // The gradient replicates the falloff of the original 5 concentric circles
-                        // but costs exactly 1 GPU draw call instead of 5.
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                0f   to colorWithAlpha(effectiveAlpha * 0.05f),
-                                0.35f to colorWithAlpha(effectiveAlpha * 0.03f),
-                                0.65f to colorWithAlpha(effectiveAlpha * 0.02f),
-                                1f   to colorWithAlpha(0f),
-                                center = moonCenter,
-                                radius = moonR * (1f + 5 * 0.28f)
-                            ),
-                            radius = moonR * (1f + 5 * 0.28f),
-                            center = moonCenter
-                        )
-
-                        // 2. Draw crescent using drawIntoCanvas with native path clipping
+                        // Draw crescent using drawIntoCanvas with native path clipping
                         drawIntoCanvas { canvas ->
                             val nCanvas = canvas.nativeCanvas
                             nCanvas.save()
@@ -1224,7 +1169,7 @@ fun ParticlesOverlay(
                                     moonR * 1.1f,
                                     intArrayOf(
                                         colorWithAlpha(effectiveAlpha).toArgb(),
-                                        colorWithAlpha(effectiveAlpha * 0.85f).toArgb()
+                                        colorWithAlpha(effectiveAlpha).toArgb()
                                     ),
                                     floatArrayOf(0f, 1f),
                                     android.graphics.Shader.TileMode.CLAMP
@@ -1235,7 +1180,7 @@ fun ParticlesOverlay(
                             // Rim glow — reuse cached Paint, update stroke/color for this frame.
                             // BlurMaskFilter is only rebuilt when moonR changes (never at runtime).
                             reusableRimPaint.strokeWidth = moonR * 0.06f
-                            reusableRimPaint.color = colorWithAlpha(effectiveAlpha * 0.55f).toArgb()
+                            reusableRimPaint.color = colorWithAlpha(effectiveAlpha).toArgb()
                             val blurRadiusPx = moonR * 0.12f
                             if (blurRadiusPx != cachedBlurRadius) {
                                 cachedBlurRadius = blurRadiusPx
@@ -1269,35 +1214,16 @@ fun ParticlesOverlay(
                     } // end else (moon)
             } // end drawCelestial lambda
 
-            // Single Canvas render with API-gated blur.
-            //
-            // Previously: drawCelestial() was called in two separate Canvas nodes
-            // (one sharp, one blurred) that crossfaded — executing the entire draw
-            // lambda twice per frame for the full transition duration.
-            //
-            // Now: one Canvas, always.  When a panel is open:
-            //   API 31+: graphicsLayer renderEffect blurs in the draw phase only.
-            //             Zero recomposition, zero extra draw-lambda execution.
-            //   API < 31: no blur — celestial simply dims with the panel alpha.
-            //             Old devices never had a GPU capable of blur at 30fps anyway.
-            val celestialBlurDp = if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                celestialBlurAlpha > 0.001f
-            ) {
-                // Snap to fixed radius — animating (blurAlpha * 18f).dp rebuilds a
-                // RenderEffect Gaussian kernel every vsync during the transition.
-                18.dp
-            } else {
-                0.dp
-            }
-
+            // Single Canvas. The blur radius comes straight from GamaUI's animated
+            // mainMenuBlurRadius (0.dp ↔ 20.dp, same tween), so the sun/moon de-blur
+            // in perfect lock-step with the text behind them — no crossfade ghosting.
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer(alpha = celestialAlpha)
                     .then(
-                        if (celestialBlurDp > 0.dp)
-                            Modifier.blur(celestialBlurDp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
+                        if (blurRadius > 0.dp && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                            Modifier.blur(blurRadius, edgeTreatment = BlurredEdgeTreatment.Unbounded)
                         else Modifier
                     )
             ) { drawCelestial() }
