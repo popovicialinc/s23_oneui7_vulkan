@@ -2696,18 +2696,7 @@ fun GamaUI(
                 Color.White.copy(alpha = 0.45f)
 
             // Main-screen background transition.
-            // When blur is enabled we crossfade into the blurred copy.
-            // When blur is disabled we keep the sharp copy and only fade in the fallback scrim.
-            val blurAlpha by animateFloatAsState(
-                targetValue = if (blurShouldApply) 1f else 0f,
-                animationSpec = if (animationLevel != 2)
-                    tween(
-                        durationMillis = if (blurShouldApply) 320 else 300,
-                        easing = if (blurShouldApply) MotionTokens.Easing.emphasizedDecelerate else MotionTokens.Easing.emphasized
-                    )
-                else snap(),
-                label = "bg_blur_alpha"
-            )
+            // When blur is disabled we only fade in the fallback scrim.
             val fallbackScrimAlpha by animateFloatAsState(
                 targetValue = if ((visualAnyFullPanelOpen && !blurEnabled) || showAggressiveWarning) 1f else 0f,
                 animationSpec = if (animationLevel != 2)
@@ -2891,6 +2880,9 @@ fun GamaUI(
                         prefs.edit().putString("last_renderer", pendingRendererName).commit()
                     }
 
+                    // 1b. Keep the home-screen widgets and QS tiles in sync right away.
+                    scope.launch { ShizukuHelper.refreshRendererViewSync(context) }
+
                     // 2. Reset commandOutput so LaunchedEffect below can detect its arrival,
                     //    then open the dialog in the in-progress (spinner) state.
                     commandOutput = ""
@@ -2922,6 +2914,9 @@ fun GamaUI(
                             if (newRenderer == "Vulkan" || newRenderer == "OpenGL") {
                                 currentRenderer = newRenderer
                                 prefs.edit().putString("last_renderer", newRenderer).apply()
+                                // The verify may have corrected the optimistic value —
+                                // push the correction out to widgets and tiles too.
+                                ShizukuHelper.refreshRendererViewSync(context)
                             }
                             // Anything else (Unknown, Default, error) — keep the optimistic
                             // value already set when the user confirmed the switch.

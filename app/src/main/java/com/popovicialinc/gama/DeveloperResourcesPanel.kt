@@ -230,14 +230,14 @@ fun ResourcesPanel(
             val tileAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
             IntegrationInfoCard(
                 title = LocalStrings.current["integrations.qs_tiles"].ifEmpty { "QUICK SETTINGS TILES" },
-                description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "Two quick-settings tiles — Vulkan and OpenGL — each lights up when active and switches instantly on tap" },
-                statusLabel = if (tileAvailable) strings["integrations.qs_tiles_available"].ifEmpty { "3 tiles available" } else strings["integrations.qs_tiles_unavailable"].ifEmpty { "Requires Android 7+" },
+                description = LocalStrings.current["integrations.qs_tiles_desc"].ifEmpty { "One quick-settings tile that toggles between Vulkan and OpenGL — tap to switch" },
+                statusLabel = if (tileAvailable) strings["integrations.qs_tiles_available"].ifEmpty { "1 tile" } else strings["integrations.qs_tiles_unavailable"].ifEmpty { "Requires Android 7+" },
                 statusOk = tileAvailable,
                 actionLabel = if (tileAvailable) strings["integrations.qs_tiles_action"].ifEmpty { "Library" } else null,
                 onAction = if (tileAvailable) ({
                     onInfoRequested(
                         strings["integrations.qs_tiles_dialog_title"].ifEmpty { "Adding QS Tiles" },
-                        strings["integrations.qs_tiles_dialog_body"].ifEmpty { "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan and OpenGL. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active." }
+                        strings["integrations.qs_tiles_dialog_body"].ifEmpty { "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA one. Drag it into your active area, then tap Done. Tap the tile to switch between Vulkan and OpenGL — the subtitle shows the current renderer." }
                     )
                 }) else null,
                 colors = colors, cardBackground = cardBackground,

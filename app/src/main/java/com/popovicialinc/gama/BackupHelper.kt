@@ -32,7 +32,7 @@ object BackupHelper {
         "gradient_enabled", "particles_enabled", "particle_parallax_enabled",
         "particle_star_mode", "particle_time_mode", "blur_enabled", "blur_optimised",
         "use_dynamic_color", "verbose_mode", "aggressive_mode",
-        "kill_launcher",
+        "kill_launcher", "kill_keyboard",
         "oled_mode", "use_dynamic_color_oled", "dismiss_on_click_outside",
         "notif_enabled", "show_gpuwatch_button", "stagger_enabled",
         "native_refresh_rate", "quarter_refresh_rate",

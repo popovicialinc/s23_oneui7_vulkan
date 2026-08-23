@@ -4,9 +4,11 @@ import android.app.Notification
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.service.quicksettings.TileService
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +66,20 @@ object ShizukuHelper {
 
     /** True when any backend (root or Shizuku) can execute commands right now. */
     fun isBackendReady(): Boolean = isRootAvailable() || (checkBinder() && checkPermission())
+
+    /**
+     * After a renderer change, keeps the QS renderer toggle tile in sync
+     * so its subtitle reflects the current renderer.
+     */
+    suspend fun refreshRendererViewSync(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                TileService.requestListeningState(
+                    context, ComponentName(context, RendererToggleTileService::class.java)
+                )
+            } catch (_: Exception) {}
+        }
+    }
 
     /**
      * Silently installs an APK via root (`pm install -r`). No confirmation dialog

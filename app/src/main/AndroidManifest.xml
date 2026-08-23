@@ -55,34 +55,6 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
-        <!-- ── GAMA Home Screen Widget ───────────────────────────────────── -->
-        <activity
-            android:name=".GamaWidgetConfigureActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
-        <receiver
-            android:name=".GamaWidgetReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/gama_widget_info" />
-        </receiver>
-
-        <receiver
-            android:name=".GamaToggleWidgetReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/gama_toggle_widget_info" />
-        </receiver>
-
         <!-- ── Tasker Integration ────────────────────────────────────────── -->
         <receiver
             android:name=".TaskerReceiver"
@@ -105,23 +77,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- ── Quick Settings Tile: Vulkan ──────────────────────────────── -->
+        <!-- ── Quick Settings Tile: Renderer toggle (Vulkan ↔ OpenGL) ────── -->
         <service
-            android:name=".VulkanTileService"
+            android:name=".RendererToggleTileService"
             android:exported="true"
-            android:label="GAMA · Vulkan"
-            android:icon="@drawable/ic_tile"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <!-- ── Quick Settings Tile: OpenGL ──────────────────────────────── -->
-        <service
-            android:name=".OpenGLTileService"
-            android:exported="true"
-            android:label="GAMA · OpenGL"
+            android:label="GAMA · Renderer"
             android:icon="@drawable/ic_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

@@ -79,6 +79,10 @@
     "toggle_desc": "Puncte mici plutesc prin fundal — dau aplicației o senzație vie",
     "appearance_title": "ASPECT",
     "appearance_desc": "Mod stele, mod timp și felul în care arată particulele",
+    "glyph_settings": "SETĂRI\nGLIFE",
+    "shape_look": "FORMĂ ȘI\nASPECT",
+    "matrix_settings_title": "SETĂRI\nMATRICI",
+    "particles_settings_title": "SETĂRI\nPARTICULE",
     "motion_title": "MIȘCARE",
     "motion_desc": "Viteză, paralaxă și modul în care se mișcă particulele",
     "performance_title": "PERFORMANȚĂ",
@@ -171,6 +175,9 @@
     "behavior_title": "COMPORTAMENT",
     "kill_keyboard": "REPORNEȘTE TASTATURA LA SCHIMBARE",
     "kill_keyboard_desc": "Oprește forțat tastatura selectată după aplicarea motorului grafic, ca să se reîncarce cu noul API grafic"
+  },
+  "resources": {
+    "title": "RESURSE"
   },
   "system": {
     "title": "SISTEM",
@@ -374,7 +381,13 @@
     "shizuku_installing": "Se instalează Shizuku…",
     "shizuku_download_consent": "Aceasta descarcă APK-ul Shizuku de pe GitHub și îl instalează direct, ocolind verificările F-Droid. Continui?",
     "shizuku_download_failed": "Descărcarea a eșuat. Verifică conexiunea și încearcă din nou.",
+    "shizuku_install_blocked": "GAMA nu poate deschide programul de instalare. Activează 'Instalare aplicații necunoscute' pentru GAMA în Setări, apoi reîncearcă.",
     "btn_retry": "Reîncearcă descărcarea",
+    "btn_open_shizuku": "Deschide Shizuku",
+    "root_title": "Alege metoda de acces",
+    "root_body": "GAMA are nevoie de acces shell pentru a schimba rendererul. Acordă-l prin Shizuku sau — dacă dispozitivul este rootat — folosește backendul root (Magisk / KernelSU).",
+    "btn_use_shizuku": "Folosește Shizuku",
+    "btn_use_root": "Folosește Root (su)",
     "github_title": "Vrei să vizitezi repository-ul GAMA de pe GitHub?",
     "external_link_title": "Ieși din GAMA",
     "developer_title": "Mod dezvoltator",
@@ -436,9 +449,9 @@
     "apply": "Aplică"
   },
   "tile": {
-    "label": "GAMA · Vulkan",
-    "state_active": "Activ",
-    "state_tap_to_enable": "Atinge pentru activare",
+    "label": "GAMA · Renderer",
+    "state_vulkan": "Vulkan · atinge pentru OpenGL",
+    "state_opengl": "OpenGL · atinge pentru Vulkan",
     "state_switching": "Se schimbă…",
     "state_shizuku_not_running": "Shizuku nu rulează",
     "state_permission_needed": "Permisiune necesară",
