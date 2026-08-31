@@ -28,7 +28,15 @@ While optimized for the Samsung Galaxy S23 lineup, this project is compatible wi
 * ☕ If you want to support the development of GAMA, [**consider donating**](https://buymeacoffee.com/popovicialinc)!
 
 **Stargazers over time**
-[![Stargazers over time](https://starchart.cc/palincat/gama.svg?variant=adaptive)](https://starchart.cc/palincat/gama)
+## Star History
+
+<a href="https://www.star-history.com/?repos=palincat%2Fgama&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=palincat/gama&type=date&theme=dark&legend=top-left&sealed_token=HrZ1hTKM1J65sFwk4HM1pwsE3GG7xUiB2ZSQ8CKyJG4uMJNGEB0tP5AW3LxaNC-_jG6LSUBQsu3BjVSwf1hMLZljD5Zb7lUdq12qhPSyim3DtbB6eYW0h707JQqXj0H81C2A8jtQkUcT1CYqbVbheX63vTRf1QTML1IyoPDVwEtnFtVdfos-BP529_Jc" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=palincat/gama&type=date&legend=top-left&sealed_token=HrZ1hTKM1J65sFwk4HM1pwsE3GG7xUiB2ZSQ8CKyJG4uMJNGEB0tP5AW3LxaNC-_jG6LSUBQsu3BjVSwf1hMLZljD5Zb7lUdq12qhPSyim3DtbB6eYW0h707JQqXj0H81C2A8jtQkUcT1CYqbVbheX63vTRf1QTML1IyoPDVwEtnFtVdfos-BP529_Jc" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=palincat/gama&type=date&legend=top-left&sealed_token=HrZ1hTKM1J65sFwk4HM1pwsE3GG7xUiB2ZSQ8CKyJG4uMJNGEB0tP5AW3LxaNC-_jG6LSUBQsu3BjVSwf1hMLZljD5Zb7lUdq12qhPSyim3DtbB6eYW0h707JQqXj0H81C2A8jtQkUcT1CYqbVbheX63vTRf1QTML1IyoPDVwEtnFtVdfos-BP529_Jc" />
+ </picture>
+</a>
 
 <br>
 
