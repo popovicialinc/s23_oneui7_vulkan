@@ -1,5 +1,6 @@
 package rikka.shizuku;
 
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -112,6 +113,7 @@ public class ShizukuProvider extends ContentProvider {
      *
      * @param context Context
      */
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     public static void requestBinderForNonProviderProcess(@NonNull Context context) {
         if (isProviderProcess) {
             return;

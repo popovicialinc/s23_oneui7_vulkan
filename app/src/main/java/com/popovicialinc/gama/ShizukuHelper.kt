@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.service.quicksettings.TileService
 import android.widget.Toast
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,24 +42,26 @@ object ShizukuHelper {
 
     @Volatile
     private var rootAvailabilityCache: Boolean? = null
+    @Volatile
+    private var rootAvailabilityCheckedAtMs: Long = 0L
+    private const val ROOT_CACHE_TTL_MS = 30_000L
 
     /**
-     * Probes for a working `su` binary and caches the result. Safe to call
-     * repeatedly — the process is spawned once per app lifetime.
+     * Requests and verifies root through `su`. This must be called only after
+     * an explicit user action: Magisk / KernelSU may display an approval prompt.
+     *
+     * [runRootCommand] waits for the process before consuming its streams. Reading
+     * stdout first can otherwise block forever while a root manager is waiting
+     * for the user to approve the request.
      */
     suspend fun refreshRootAvailability(): Boolean = withContext(Dispatchers.IO) {
-        rootAvailabilityCache?.let { return@withContext it }
-        val result = try {
-            val process = ProcessBuilder("su", "-c", "id")
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText()
-            val exited = process.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
-            if (!exited) process.destroy()
-            val ok = exited && process.exitValue() == 0 && output.contains("uid=0")
-            ok
-        } catch (_: Exception) { false }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (rootAvailabilityCache == true && now - rootAvailabilityCheckedAtMs < ROOT_CACHE_TTL_MS) {
+            return@withContext true
+        }
+        val result = runRootCommand("id").contains("uid=0")
         rootAvailabilityCache = result
+        rootAvailabilityCheckedAtMs = android.os.SystemClock.elapsedRealtime()
         result
     }
 
@@ -79,15 +82,26 @@ object ShizukuHelper {
                 )
             } catch (_: Exception) {}
         }
+        // Renderer changes can originate from the main screen, Tasker, boot
+        // restore, or the QS tile. Refresh every installed Glance instance so
+        // its displayed renderer never remains stale after an external switch.
+        try {
+            val manager = GlanceAppWidgetManager(context)
+            manager.getGlanceIds(GamaWidget::class.java).forEach { glanceId ->
+                GamaWidget().update(context, glanceId)
+            }
+        } catch (_: Exception) {}
     }
 
     /**
      * Silently installs an APK via root (`pm install -r`). No confirmation dialog
      * appears at all. Returns false if root isn't available or the install failed.
+     * The path is single-quoted with [shellQuote] so spaces or shell metacharacters
+     * in the path can never break out of the argument.
      */
     suspend fun installApkViaRoot(apkPath: String): Boolean {
         if (!isRootAvailable()) return false
-        val result = runRootCommand("pm install -r \"$apkPath\"")
+        val result = runRootCommand("pm install -r ${shellQuote(apkPath)}")
         return result == "Success"
     }
 
@@ -120,8 +134,8 @@ object ShizukuHelper {
                 } else -1
                 when {
                     !finished -> "Error: command timed out"
+                    exitCode != 0 -> "Error: ${(error.ifBlank { output }).trim().ifBlank { "exit code $exitCode" }}"
                     output.isNotEmpty() -> output.trim()
-                    exitCode != 0 && error.isNotEmpty() -> "Error: ${error.trim()}"
                     else -> "Success"
                 }
             } finally {
@@ -221,8 +235,8 @@ object ShizukuHelper {
                 } else -1
                 when {
                     !finished -> "Error: command timed out"
+                    exitCode != 0 -> "Error: ${(error.ifBlank { output }).trim().ifBlank { "exit code $exitCode" }}"
                     output.isNotEmpty() -> output.trim()
-                    exitCode != 0 && error.isNotEmpty() -> "Error: ${error.trim()}"
                     else -> "Success"
                 }
             } finally {
@@ -291,39 +305,8 @@ object ShizukuHelper {
         "Unknown"
     }
 
-    // ── Educated guess when Shizuku is unavailable ────────────────────────────
-    // Returns the best guess at the current renderer without running any shell
-    // commands, using only stable signals (SharedPreferences + boot time).
-    //
-    //  • If the device rebooted after the last recorded renderer switch, Android
-    //    will have cleared all runtime system props → must be OpenGL (default).
-    //  • Otherwise, last_renderer pref is our best evidence.
-    //
-    // Uses last_switch_uptime (SystemClock.elapsedRealtime() at switch time)
-    // rather than last_switch_time (wall-clock) for reboot detection.
-    // elapsedRealtime resets to ~0 on every boot, so comparing the stored
-    // uptime against current elapsedRealtime() reliably detects reboots even
-    // if the user manually changed the system clock between sessions.
-    fun guessRendererWithoutShizuku(prefs: android.content.SharedPreferences): String {
-        val lastRenderer     = prefs.getString("last_renderer", "OpenGL") ?: "OpenGL"
-        val lastSwitchUptime = prefs.getLong("last_switch_uptime", 0L)
-
-        // If we've never recorded an uptime-stamped switch, fall back to the
-        // wall-clock key for backward compatibility with existing installs.
-        if (lastSwitchUptime == 0L) {
-            val lastSwitchMs = prefs.getLong("last_switch_time", 0L)
-            val bootTimeMs   = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime()
-            return if (lastSwitchMs > 0L && bootTimeMs > lastSwitchMs) "OpenGL" else lastRenderer
-        }
-
-        // Reliable path: if current elapsedRealtime < stored uptime, the device
-        // has rebooted since the last switch and runtime props were cleared.
-        return if (android.os.SystemClock.elapsedRealtime() < lastSwitchUptime) {
-            "OpenGL"
-        } else {
-            lastRenderer
-        }
-    }
+    // Offline renderer guessing moved to RendererState (boot-time stamp based,
+    // unit-tested). ShizukuHelper only owns backend-backed detection.
 
     private val safePackageNameRegex = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
     private fun isSafePackageName(pkg: String): Boolean {
@@ -336,6 +319,14 @@ object ShizukuHelper {
 
     private fun packageFromComponent(component: String): String {
         return component.substringBefore('/').trim()
+    }
+
+    private fun launcherPackageFromShellOutput(output: String): String {
+        return output.lineSequence()
+            .flatMap { line -> line.split(Regex("[\\s,]+" )).asSequence() }
+            .map { token -> token.trim('[', ']', '(', ')').substringBefore('/') }
+            .firstOrNull(::isSafePackageName)
+            .orEmpty()
     }
 
     private fun isXiaomiFamilyDevice(): Boolean {
@@ -377,7 +368,11 @@ object ShizukuHelper {
     // Both Vulkan and OpenGL switching are identical except for the prop value
     // and the display label. A single private function eliminates the duplication
     // so future changes (e.g. new app-restart logic) only need to be made once.
-
+    //
+    // Returns true when the renderer prop was verified to hold the target value
+    // after the switch (or already held it). Callers that persist switch state
+    // (tile, Tasker) should only record the new renderer when this returns true,
+    // so a failed switch never poisons boot-restore.
     private suspend fun switchRendererSuspend(
         propValue: String,
         label: String,
@@ -389,7 +384,7 @@ object ShizukuHelper {
         targetedApps: Set<String>,
         onStatusUpdate: (String) -> Unit,
         onVerboseOutput: ((String) -> Unit)? = null
-    ) = withContext(Dispatchers.IO) {
+    ): Boolean = withContext(Dispatchers.IO) {
         withContext(Dispatchers.Main) { onStatusUpdate("Running $label commands...") }
 
         val originalIme = runCommand("settings get secure default_input_method")
@@ -399,27 +394,25 @@ object ShizukuHelper {
             .orEmpty()
             .takeIf { it.isNotBlank() && it != "null" }
         val originalImePackage = originalIme?.let { packageFromComponent(it) }.orEmpty()
-        // Detect the ACTUAL home launcher — the static known-launcher list misses
-        // third-party launchers (Nova, Lawnchair, ...), so "kill launcher" appeared
-        // to do nothing for users running those. resolve-activity returns the real
-        // default home, whatever it is.
-        val activeLauncher = runCommand(
-            "cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME"
+        // Resolve the actual default HOME app. Samsung One UI Home, third-party
+        // launchers, and OEM launchers are all handled without guessing package
+        // names. The role query is a fallback for ROMs that omit resolve-activity.
+        val resolvedLauncher = launcherPackageFromShellOutput(
+            runCommand("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
         )
-            .lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.contains("/") && !it.contains("ResolverActivity") }
-            ?.substringBefore('/')
-            ?.trim()
-            .orEmpty()
-            .takeIf { isSafePackageName(it) }
-            .orEmpty()
+        val activeLauncher = resolvedLauncher.ifBlank {
+            launcherPackageFromShellOutput(
+                runCommand("cmd role get-role-holders android.app.role.HOME")
+            )
+        }
         val launcherPackages = knownLauncherPackages() + activeLauncher
         val xiaomiFamilyDevice = isXiaomiFamilyDevice()
         val protectedPackages = neverForceStopPackages().toMutableSet().apply {
             addAll(excludedApps)
             if (!killKeyboard && originalImePackage.isNotBlank()) add(originalImePackage)
-            if (!killLauncher || xiaomiFamilyDevice) addAll(launcherPackages)
+            // Aggressive mode must not indiscriminately stop every installed
+            // launcher. The opt-in launcher path below restarts only the active HOME app.
+            addAll(launcherPackages)
             // com.miui.home is never force-stopped. Xiaomi / HyperOS launchers have
             // repeatedly caused severe launcher loops / soft-bootloop behavior when
             // killed from a third-party Shizuku flow.
@@ -430,7 +423,6 @@ object ShizukuHelper {
             if (!isSafePackageName(pkg)) return false
             if (pkg in protectedPackages) return false
             if (pkg.startsWith("com.android.inputmethod") && !killKeyboard) return false
-            if (pkg in launcherPackages && (!killLauncher || xiaomiFamilyDevice || pkg == "com.miui.home")) return false
             return true
         }
 
@@ -476,7 +468,7 @@ object ShizukuHelper {
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                return@withContext
+                return@withContext false
             }
         }
 
@@ -529,21 +521,29 @@ object ShizukuHelper {
         // comes right back on its own, so the restart is safe. Only the launcher
         // is Xiaomi-guarded — com.miui.home is never force-stopped.
         if (killLauncher) {
-            val restartTargets = mutableListOf<String>()
-            if (!xiaomiFamilyDevice) {
-                launcherPackages
-                    .filter { it != "com.miui.home" }
-                    .filter { pkg -> canForceStopPackage(pkg) }
-                    .forEach(restartTargets::add)
-            }
-            restartTargets += "com.android.systemui"
-            restartTargets.forEach { pkg ->
-                val cmd = "am force-stop ${shellQuote(pkg)}"
-                val out = runCommand(cmd)
-                onVerboseOutput?.invoke("Running: $cmd\nOutput: $out\n\n")
-                if (out.startsWith("Error", ignoreCase = true)) {
-                    onVerboseOutput?.invoke("Restart failed ($pkg): $out\n")
+            if (activeLauncher.isNotBlank() && !xiaomiFamilyDevice && activeLauncher != "com.miui.home") {
+                val stopLauncher = "am force-stop ${shellQuote(activeLauncher)}"
+                val stopOutput = runCommand(stopLauncher)
+                onVerboseOutput?.invoke("Running: $stopLauncher\nOutput: $stopOutput\n\n")
+                if (stopOutput.startsWith("Error", ignoreCase = true)) {
+                    onVerboseOutput?.invoke("Launcher restart failed ($activeLauncher): $stopOutput\n")
+                } else {
+                    // Force-stop alone relies on the system deciding when to recreate
+                    // HOME. Explicitly launching HOME makes the restart immediate.
+                    val launchHome = "am start -a android.intent.action.MAIN -c android.intent.category.HOME"
+                    val launchOutput = runCommand(launchHome)
+                    onVerboseOutput?.invoke("Running: $launchHome\nOutput: $launchOutput\n\n")
                 }
+            } else if (xiaomiFamilyDevice) {
+                onVerboseOutput?.invoke("Launcher restart skipped on Xiaomi / HyperOS for safety.\n\n")
+            } else {
+                onVerboseOutput?.invoke("Launcher restart skipped: could not resolve the active HOME app.\n\n")
+            }
+            val systemUiCommand = "am force-stop com.android.systemui"
+            val systemUiOutput = runCommand(systemUiCommand)
+            onVerboseOutput?.invoke("Running: $systemUiCommand\nOutput: $systemUiOutput\n\n")
+            if (systemUiOutput.startsWith("Error", ignoreCase = true)) {
+                onVerboseOutput?.invoke("System UI restart failed: $systemUiOutput\n")
             }
         }
 
@@ -562,6 +562,7 @@ object ShizukuHelper {
             )
             Toast.makeText(context, "Switched to $label", Toast.LENGTH_SHORT).show()
         }
+        verified
     }
 
     suspend fun runVulkanSuspend(
@@ -609,9 +610,14 @@ object ShizukuHelper {
             }
 
             val quotedPkg = shellQuote(pkg)
-            runCommand("setprop debug.hwui.renderer.$pkg $value").also { onVerboseOutput?.invoke("Output: $it\n") }
-            runCommand("am force-stop $quotedPkg").also { onVerboseOutput?.invoke("Force-stop output: $it\n") }
-            appliedCount++
+            val setResult = runCommand("setprop debug.hwui.renderer.$pkg $value")
+            onVerboseOutput?.invoke("Output: $setResult\n")
+            val stopResult = runCommand("am force-stop $quotedPkg")
+            onVerboseOutput?.invoke("Force-stop output: $stopResult\n")
+            if (!setResult.startsWith("Error", ignoreCase = true) &&
+                !stopResult.startsWith("Error", ignoreCase = true)) {
+                appliedCount++
+            }
         }
         withContext(Dispatchers.Main) {
             onStatusUpdate("Custom renderers applied!")

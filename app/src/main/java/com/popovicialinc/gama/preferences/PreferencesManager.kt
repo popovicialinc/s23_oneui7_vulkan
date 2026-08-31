@@ -97,9 +97,10 @@ class PreferencesManager(context: Context) {
         const val USE_DYNAMIC_COLOR_OLED_KEY = "use_dynamic_color_oled"
 
         // Notification preferences
-        const val NOTIFICATIONS_ENABLED_KEY = "notifications_enabled"
-        const val NOTIF_INTERVAL_INDEX_KEY = "notif_interval_index"
-        const val LAST_NOTIF_SENT_TIME_KEY = "last_notif_sent_time"
+        // Keep these names aligned with the live GAMA UI/backup schema.
+        const val NOTIFICATIONS_ENABLED_KEY = "notif_enabled"
+        const val NOTIF_INTERVAL_INDEX_KEY = "notif_interval_idx"
+        const val LAST_NOTIF_SENT_TIME_KEY = "notif_last_sent"
     }
 
     val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -114,20 +115,14 @@ class PreferencesManager(context: Context) {
         val savedPrefsVersion = prefs.getInt(PREFS_VERSION_KEY, 0)
 
         return if (savedPrefsVersion < PREFS_VERSION) {
-            val savedUserName = prefs.getString(USER_NAME_KEY, "") ?: ""
-            val savedExcludedApps = prefs.getStringSet(EXCLUDED_APPS_KEY, emptySet()) ?: emptySet()
-            val savedLabelsShown = prefs.getBoolean(BUTTON_LABELS_SHOWN_KEY, false)
-            val savedNotifPermReq = prefs.getBoolean(NOTIF_PERM_REQUESTED_KEY, false)
-
-            // Clear old preferences and set new version
-            prefs.edit().clear()
-                .putInt(PREFS_VERSION_KEY, PREFS_VERSION)
-                .putString(USER_NAME_KEY, savedUserName)
-                .putStringSet(EXCLUDED_APPS_KEY, savedExcludedApps)
-                .putBoolean(BUTTON_LABELS_SHOWN_KEY, savedLabelsShown)
-                .putBoolean(NOTIF_PERM_REQUESTED_KEY, savedNotifPermReq)
-                .putInt(ANIMATION_SPEED_KEY, 1) // Default to normal speed
-                .apply()
+            // Migrations must be additive. Clearing the preference file would
+            // silently reset every user setting on a schema bump.
+            prefs.edit().apply {
+                putInt(PREFS_VERSION_KEY, PREFS_VERSION)
+                if (!prefs.contains(ANIMATION_SPEED_KEY)) {
+                    putInt(ANIMATION_SPEED_KEY, 1) // Default for genuinely new keys
+                }
+            }.apply()
 
             true
         } else {
@@ -269,7 +264,10 @@ class PreferencesManager(context: Context) {
                 putBoolean(USE_DYNAMIC_COLOR_OLED_KEY, useDynamicColorOLED)
 
                 // User preferences
-                putBoolean(BUTTON_LABELS_SHOWN_KEY, dismissOnClickOutside)
+                // `dismissOnClickOutside` is a dialog behavior preference; it
+                // must not overwrite the one-time button-label onboarding flag.
+                putBoolean("dismiss_on_click_outside", dismissOnClickOutside)
+                // button_labels_shown is written by the launch onboarding flow.
                 putBoolean(NOTIF_PERM_REQUESTED_KEY, notifPermissionRequested)
                 putBoolean(NOTIFICATIONS_ENABLED_KEY, notificationsEnabled)
                 putInt(NOTIF_INTERVAL_INDEX_KEY, notifIntervalIndex)

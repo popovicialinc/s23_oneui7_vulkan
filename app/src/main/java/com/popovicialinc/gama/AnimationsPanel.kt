@@ -91,7 +91,14 @@ fun AnimationsPanel(
                                 color = colors.primaryAccent.copy(alpha = 0.7f)
                             )
                             GlideOptionSelector(
-                                options = listOf("Full", "Reduced"),
+                                // animationLevel is tri-state (0=Full, 1=Reduced, 2=Off)
+                                // — same three options as VisualEffectsPanel; offering
+                                // only two here made level==2 render as "Reduced".
+                                options = listOf(
+                                    LocalStrings.current["appearance.anim_full"].ifEmpty { "Full" },
+                                    LocalStrings.current["appearance.anim_reduced"].ifEmpty { "Reduced" },
+                                    LocalStrings.current["appearance.anim_off"].ifEmpty { "Off" }
+                                ),
                                 selectedIndex = animationLevel,
                                 onOptionSelected = { performHaptic(); onAnimationLevelChange(it) },
                                 colors = colors,

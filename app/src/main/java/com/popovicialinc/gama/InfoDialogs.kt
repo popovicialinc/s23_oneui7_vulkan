@@ -302,7 +302,7 @@ fun ShizukuHelpDialog(
                         )
                     }
 
-                    if (installPhase == -1 && installError.isNotEmpty()) {
+                if (installPhase == -1 && installError.isNotEmpty()) {
                         Text(
                             text = installError,
                             fontSize = ts.bodySmall,
@@ -362,6 +362,22 @@ fun ShizukuHelpDialog(
                 DialogStepRow(2, "Tap \"Authorized applications\"", colors = colors)
                 DialogStepRow(3, "Enable GAMA", colors = colors)
                 DialogStepRow(4, "Reopen GAMA from your recents", colors = colors)
+                if (shizukuInstalled) {
+                    DialogButton(
+                        text = LocalStrings.current["dialogs.btn_open_shizuku"].ifEmpty { "Open Shizuku" },
+                        onClick = {
+                            context.packageManager
+                                .getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                ?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = true,
+                        borderAlphaOverride = dialogBorderAlpha
+                    )
+                }
             }
 
             // ── Root alternative — only relevant when neither backend is ready ──

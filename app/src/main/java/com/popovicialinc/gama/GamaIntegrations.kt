@@ -167,7 +167,7 @@ fun IntegrationsPanel(
                     fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
                     colors = colors,
                     reverseGradient = false,
-                    scrollOffset = scrollState.value
+                    scrollState = scrollState
                 )
 
                 Text(
@@ -218,7 +218,7 @@ fun IntegrationsPanel(
                                     onAction = if (tileAvailable) ({
                                         onInfoRequested(
                                             "Adding QS Tiles",
-                                            "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan and OpenGL. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
+                                            "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA tile. Drag it into your active area, then tap Done. Tap the tile to switch between Vulkan and OpenGL; its subtitle shows the current renderer."
                                         )
                                     }) else null,
                                     colors = colors,
@@ -263,7 +263,7 @@ fun IntegrationsPanel(
                             onAction = if (tileAvailable) ({
                                 onInfoRequested(
                                     "Adding QS Tiles",
-                                    "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA ones: Vulkan and OpenGL. Drag whichever tiles you want into your active area, then tap Done. Each tile shows as highlighted when its mode is currently active."
+                                    "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA tile. Drag it into your active area, then tap Done. Tap the tile to switch between Vulkan and OpenGL; its subtitle shows the current renderer."
                                 )
                             }) else null,
                             colors = colors,
@@ -320,6 +320,8 @@ fun IntegrationInfoDialog(
     visible: Boolean,
     title: String,
     body: String,
+    copyText: String? = null,
+    guideUrl: String? = null,
     onDismiss: () -> Unit,
     isSmallScreen: Boolean,
     isLandscape: Boolean,
@@ -368,6 +370,32 @@ fun IntegrationInfoDialog(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (copyText != null) {
+                    DialogButton(
+                        text = "Copy token",
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("GAMA Tasker token", copyText))
+                            android.widget.Toast.makeText(context, "Tasker token copied", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = true
+                    )
+                }
+                if (guideUrl != null) {
+                    DialogButton(
+                        text = "Open full guide",
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(guideUrl)))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground
+                    )
+                }
                 DialogButton(
                     text = LocalStrings.current["dialogs.btn_close"].ifEmpty { "Close" },
                     onClick = onDismiss,

@@ -147,7 +147,7 @@ fun ResourcesPanel(
     visible: Boolean,
     onDismiss: () -> Unit,
     onLinkSelected: (url: String, label: String, description: String) -> Unit,
-    onInfoRequested: (title: String, body: String) -> Unit,
+    onInfoRequested: (title: String, body: String, copyText: String?, guideUrl: String?) -> Unit,
     isSmallScreen: Boolean,
     isLandscape: Boolean,
     isTablet: Boolean,
@@ -157,6 +157,7 @@ fun ResourcesPanel(
     oledMode: Boolean
 ) {
     val ts = LocalTypeScale.current
+    val context = LocalContext.current
 
     val strings = LocalStrings.current
 
@@ -191,7 +192,7 @@ fun ResourcesPanel(
         CleanTitle(
             text = LocalStrings.current["resources.title"].ifEmpty { "LIBRARY" },
             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
-            colors = colors, scrollOffset = scrollState.value
+            colors = colors, scrollState = scrollState
         )
 
         // ── Links ─────────────────────────────────────────────────────────────
@@ -213,12 +214,13 @@ fun ResourcesPanel(
                 description = LocalStrings.current["integrations.tasker_desc"].ifEmpty { "Automate renderer switching based on app launch, time, WiFi, or any Tasker trigger via broadcast intents" },
                 statusLabel = strings["integrations.tasker_status"].ifEmpty { "Available" },
                 statusOk = true,
-                actionLabel = strings["integrations.tasker_action"].ifEmpty { "Open guide" },
+                actionLabel = strings["integrations.tasker_action"].ifEmpty { "Set up" },
                 onAction = {
-                    onLinkSelected(
-                        "https://github.com/popovicialinc/gama/blob/main/!assets/GAMA_Tasker_Guide.pdf",
-                        strings["integrations.tasker"].ifEmpty { "Tasker Guide" },
-                        strings["integrations.tasker_link_desc"].ifEmpty { "This will open the GAMA Tasker integration guide on GitHub. It covers how to use broadcast intents to automate renderer switching based on time, app launch, WiFi network, and more." }
+                    onInfoRequested(
+                        strings["integrations.tasker"].ifEmpty { "Tasker" },
+                        "Your personal token lets Tasker control GAMA while preventing other apps from changing your renderer. Copy it first, then open the step-by-step guide and enter it exactly where shown.",
+                        TaskerAuth.getOrCreateToken(context),
+                        "https://github.com/popovicialinc/gama/blob/main/!assets/GAMA_Tasker_Guide.pdf"
                     )
                 },
                 colors = colors, cardBackground = cardBackground,
@@ -237,7 +239,9 @@ fun ResourcesPanel(
                 onAction = if (tileAvailable) ({
                     onInfoRequested(
                         strings["integrations.qs_tiles_dialog_title"].ifEmpty { "Adding QS Tiles" },
-                        strings["integrations.qs_tiles_dialog_body"].ifEmpty { "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA one. Drag it into your active area, then tap Done. Tap the tile to switch between Vulkan and OpenGL — the subtitle shows the current renderer." }
+                        strings["integrations.qs_tiles_dialog_body"].ifEmpty { "Pull down your notification shade and tap the Edit button (pencil icon). Scroll through the available tiles until you find the GAMA one. Drag it into your active area, then tap Done. Tap the tile to switch between Vulkan and OpenGL — the subtitle shows the current renderer." },
+                        null,
+                        null
                     )
                 }) else null,
                 colors = colors, cardBackground = cardBackground,
@@ -255,7 +259,9 @@ fun ResourcesPanel(
                 onAction = {
                     onInfoRequested(
                         strings["integrations.widget_dialog_title"].ifEmpty { "Adding the Widget" },
-                        strings["integrations.widget_dialog_body"].ifEmpty { "Use the launcher's widget picker, or tap the add button below to open Android's native widget pin sheet when supported. Once placed, the GAMA widget gives you quick renderer switching, live status, and a fast shortcut back into the app." }
+                        strings["integrations.widget_dialog_body"].ifEmpty { "Use the launcher's widget picker, or tap the add button below to open Android's native widget pin sheet when supported. Once placed, the GAMA widget gives you quick renderer switching, live status, and a fast shortcut back into the app." },
+                        null,
+                        null
                     )
                 },
                 colors = colors, cardBackground = cardBackground,

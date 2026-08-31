@@ -1,0 +1,5 @@
+Version 1.4
+
+- Added a home-screen widget and a single Quick Settings renderer toggle.
+- Improved renderer detection, root/Shizuku command error handling, and reboot restore reliability.
+- Added safer release checks and refreshed integration guidance.

@@ -1,5 +1,6 @@
 package com.popovicialinc.gama
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -16,6 +17,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.coroutines.resume
 
 /**
@@ -31,6 +33,7 @@ object ShizukuInstaller {
     private const val RELEASE_PAGE_URL = "https://github.com/RikkaApps/Shizuku/releases/latest"
     private const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
     private const val MIN_APK_SIZE = 1_000_000L // ~2.5 MB is normal; anything under 1 MB is not Shizuku
+    private const val MAX_APK_SIZE = 32_000_000L // protect cache storage from a bad/compromised response
     private const val USER_AGENT = "GAMA/1.4 (renderer manager; github.com/popovicialinc/gama)"
 
     // APK asset href inside the GitHub "expanded assets" page, e.g.
@@ -52,6 +55,42 @@ object ShizukuInstaller {
     )
 
     /**
+     * A resolved APK download target: the direct URL plus, when known, the
+     * release's official SHA-256 digest ("sha256:<hex>" as published by the
+     * GitHub API in each asset). The digest is verified after download; the
+     * HTML fallback resolver cannot provide one and relies on TLS + the
+     * remaining post-download checks.
+     */
+    private class ResolvedApk(val url: String, val sha256Digest: String?)
+
+    /**
+     * Only GitHub release hosts may be downloaded from. The URL comes either
+     * from api.github.com JSON or is scraped from a github.com page — both over
+     * TLS — but the allowlist adds a second barrier against a compromised
+     * resolver ever pointing at a third-party host.
+     */
+    private fun isAllowedDownloadHost(url: String): Boolean {
+        return try {
+            val host = URL(url).host.lowercase()
+            url.lowercase().startsWith("https://") && (
+                host == "github.com" || host.endsWith(".github.com") ||
+                    host == "githubusercontent.com" || host.endsWith(".githubusercontent.com")
+                )
+        } catch (_: Exception) { false }
+    }
+
+    /** Streams [file] through SHA-256 and returns the lowercase hex digest. */
+    private fun sha256HexOf(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            var read: Int
+            while (input.read(buffer).also { read = it } != -1) md.update(buffer, 0, read)
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
      * Downloads the latest Shizuku release APK into the cache dir.
      *
      * @param onProgress called on the IO dispatcher with 0f..1f while streaming.
@@ -67,14 +106,17 @@ object ShizukuInstaller {
                 // per hour PER IP — and mobile carriers share IPs, so it gets
                 // rate-limited (HTTP 403) a lot. The plain release page has no
                 // such limit, so it's the fallback whenever the API fails.
-                val apkUrl = resolveApkUrlApi() ?: resolveApkUrlHtml()
-                if (apkUrl == null) {
+                val resolved = resolveApkUrlApi() ?: resolveApkUrlHtml()
+                if (resolved == null) {
                     return@withContext DownloadResult(null, lastError)
+                }
+                if (!isAllowedDownloadHost(resolved.url)) {
+                    return@withContext DownloadResult(null, "Resolved download URL is not a GitHub host — aborting")
                 }
 
                 // ── 2. Stream the APK to cache ─────────────────────────────────
                 target.parentFile?.mkdirs()
-                val dlConnection = URL(apkUrl).openConnection() as HttpURLConnection
+                val dlConnection = URL(resolved.url).openConnection() as HttpURLConnection
                 try {
                     dlConnection.setRequestProperty("User-Agent", USER_AGENT)
                     dlConnection.connectTimeout = 15_000
@@ -85,6 +127,10 @@ object ShizukuInstaller {
                         return@withContext DownloadResult(null, lastError)
                     }
                     val totalBytes = dlConnection.contentLengthLong
+                    if (totalBytes > MAX_APK_SIZE) {
+                        target.delete()
+                        return@withContext DownloadResult(null, "Downloaded APK is unexpectedly large")
+                    }
                     dlConnection.inputStream.use { input ->
                         FileOutputStream(target).use { output ->
                             val buffer = ByteArray(64 * 1024)
@@ -93,6 +139,9 @@ object ShizukuInstaller {
                             while (input.read(buffer).also { read = it } != -1) {
                                 output.write(buffer, 0, read)
                                 downloaded += read
+                                if (downloaded > MAX_APK_SIZE) {
+                                    throw IllegalStateException("Downloaded APK exceeds the safety size limit")
+                                }
                                 if (totalBytes > 0) {
                                     onProgress((downloaded.toFloat() / totalBytes).coerceIn(0f, 1f))
                                 }
@@ -103,7 +152,7 @@ object ShizukuInstaller {
                     dlConnection.disconnect()
                 }
 
-                // ── 3. Verify: size, ZIP magic, and real package name ──────────
+                // ── 3. Verify: size, ZIP magic, SHA-256 digest, package name ───
                 if (target.length() < MIN_APK_SIZE) {
                     target.delete()
                     return@withContext DownloadResult(null, "Downloaded file is too small to be an APK")
@@ -115,6 +164,19 @@ object ShizukuInstaller {
                     ) {
                         target.delete()
                         return@withContext DownloadResult(null, "Downloaded file isn't a valid APK")
+                    }
+                }
+                // Official per-release digest (GitHub API) — catches corrupted or
+                // tampered downloads that still parse as an APK.
+                resolved.sha256Digest?.let { expected ->
+                    val expectedHex = expected.substringAfter("sha256:", expected).trim()
+                    val actualHex = sha256HexOf(target)
+                    if (!actualHex.equals(expectedHex, ignoreCase = true)) {
+                        target.delete()
+                        return@withContext DownloadResult(
+                            null,
+                            "APK checksum mismatch (expected $expectedHex, got $actualHex)"
+                        )
                     }
                 }
                 val pkgInfo = context.packageManager.getPackageArchiveInfo(target.absolutePath, 0)
@@ -131,10 +193,11 @@ object ShizukuInstaller {
         }
 
     /**
-     * Tries the GitHub JSON API first.
-     * @return a direct APK download URL, or null (with [lastError] set).
+     * Tries the GitHub JSON API first. The API also publishes each asset's
+     * official SHA-256 digest, which [downloadLatestApk] verifies.
+     * @return the resolved APK target, or null (with [lastError] set).
      */
-    private fun resolveApkUrlApi(): String? {
+    private fun resolveApkUrlApi(): ResolvedApk? {
         try {
             val conn = URL(RELEASE_API_URL).openConnection() as HttpURLConnection
             try {
@@ -150,7 +213,9 @@ object ShizukuInstaller {
                             val asset = assets.getJSONObject(i)
                             if (asset.optString("name").endsWith(".apk", ignoreCase = true)) {
                                 val url = asset.optString("browser_download_url")
-                                if (url.isNotBlank()) return url
+                                if (url.isNotBlank()) {
+                                    return ResolvedApk(url, asset.optString("digest").takeIf { it.isNotBlank() })
+                                }
                             }
                         }
                         lastError = "No APK found on the GitHub release page"
@@ -169,9 +234,10 @@ object ShizukuInstaller {
     /**
      * Rate-limit-free fallback: follows /releases/latest to the tag page, then
      * reads the "expanded assets" page which lists the APK download link.
-     * @return a direct APK download URL, or null (with [lastError] set).
+     * No digest is available on this path — TLS + post-download checks apply.
+     * @return the resolved APK target, or null (with [lastError] set).
      */
-    private fun resolveApkUrlHtml(): String? {
+    private fun resolveApkUrlHtml(): ResolvedApk? {
         try {
             val latest = URL(RELEASE_PAGE_URL).openConnection() as HttpURLConnection
             val tagUrl: String
@@ -207,7 +273,8 @@ object ShizukuInstaller {
                     return null
                 }
                 val href = match.groupValues[1]
-                return if (href.startsWith("http")) href else "https://github.com$href"
+                val url = if (href.startsWith("http")) href else "https://github.com$href"
+                return ResolvedApk(url, null)
             } finally {
                 page.disconnect()
             }
@@ -232,7 +299,11 @@ object ShizukuInstaller {
      *         [InstallResult.Failed] with a human-readable reason.
      */
     suspend fun installApk(context: Context, apkFile: File): InstallResult {
-        if (ShizukuHelper.isRootAvailable() && ShizukuHelper.installApkViaRoot(apkFile.absolutePath)) {
+        // Probe (not just read the cache) so a fresh process can still take the
+        // silent root path; falls back to the user-confirmed session otherwise.
+        if ((ShizukuHelper.isRootAvailable() || ShizukuHelper.refreshRootAvailability()) &&
+            ShizukuHelper.installApkViaRoot(apkFile.absolutePath)
+        ) {
             return InstallResult.Installed
         }
         return installViaSession(context.applicationContext, apkFile)
@@ -289,8 +360,22 @@ object ShizukuInstaller {
                                     @Suppress("DEPRECATION")
                                     intent.getParcelableExtra(Intent.EXTRA_INTENT)
                                 }
-                                confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    ?.let { context.startActivity(it) }
+                                // PackageInstaller supplies an explicit confirmation
+                                // activity. Never launch an implicit intent here: an
+                                // unrelated app must not be able to intercept or
+                                // impersonate the install confirmation surface.
+                                if (confirm?.component != null) {
+                                    confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    @SuppressLint("UnsafeIntentLaunch")
+                                    context.startActivity(confirm)
+                                } else {
+                                    runCatching { context.unregisterReceiver(this) }
+                                    cont.resume(
+                                        InstallResult.Failed(
+                                            "The system installer returned an invalid confirmation intent"
+                                        )
+                                    )
+                                }
                             }
 
                             PackageInstaller.STATUS_FAILURE_ABORTED -> {

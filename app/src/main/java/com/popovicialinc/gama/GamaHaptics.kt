@@ -30,6 +30,7 @@ object GamaHaptics {
     const val PREF_RENDERER_ENABLED = "haptics_renderer_enabled"
     const val PREF_LANGUAGE_ENABLED = "haptics_language_enabled"
     const val PREF_BOUNCE_ENABLED = "haptics_bounce_enabled"
+    const val PREF_BOUNCE_RETURN_ENABLED = "haptics_return_enabled"
 
     const val PREF_REGULAR_STRENGTH = "haptics_regular_strength"
     const val PREF_HOLD_STRENGTH = "haptics_hold_strength"
@@ -44,6 +45,7 @@ object GamaHaptics {
     const val DEFAULT_RENDERER_ENABLED = true
     const val DEFAULT_LANGUAGE_ENABLED = true
     const val DEFAULT_BOUNCE_ENABLED = true
+    const val DEFAULT_BOUNCE_RETURN_ENABLED = true
 
     const val DEFAULT_REGULAR_STRENGTH = 58
     const val DEFAULT_HOLD_STRENGTH = 82
@@ -67,10 +69,6 @@ object GamaHaptics {
         }
     }
 
-    fun click(view: View, type: Int = HapticFeedbackConstants.CONTEXT_CLICK) {
-        view.performHapticFeedback(type)
-    }
-
     fun lightClick(context: Context, view: View, strengthOverride: Int? = null) {
         if (!categoryEnabled(context, PREF_REGULAR_ENABLED, DEFAULT_REGULAR_ENABLED)) return
         val amp = scaled(context, PREF_REGULAR_STRENGTH, 76, 36, 138, DEFAULT_REGULAR_STRENGTH, strengthOverride)
@@ -79,28 +77,12 @@ object GamaHaptics {
         }
     }
 
-    fun navigation(context: Context, view: View, strengthOverride: Int? = null) {
-        if (!categoryEnabled(context, PREF_REGULAR_ENABLED, DEFAULT_REGULAR_ENABLED)) return
-        val amp = scaled(context, PREF_REGULAR_STRENGTH, 86, 42, 150, DEFAULT_REGULAR_STRENGTH, strengthOverride)
-        if (!vibrateOneShot(context, 17L, amp)) {
-            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-        }
-    }
-
-    fun navigation(view: View) {
-        view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-    }
-
     fun selection(context: Context, view: View, strengthOverride: Int? = null) {
         if (!categoryEnabled(context, PREF_REGULAR_ENABLED, DEFAULT_REGULAR_ENABLED)) return
         val amp = scaled(context, PREF_REGULAR_STRENGTH, 62, 28, 116, DEFAULT_REGULAR_STRENGTH, strengthOverride)
         if (!vibrateOneShot(context, 12L, amp)) {
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
-    }
-
-    fun selection(view: View) {
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
     fun hold(context: Context, view: View, strengthOverride: Int? = null) {
@@ -212,7 +194,7 @@ object GamaHaptics {
 
     /** Stronger settling pulse when cards return to normal width. */
     fun avoidanceReturn(context: Context, view: View, strengthOverride: Int? = null) {
-        if (!categoryEnabled(context, PREF_BOUNCE_ENABLED, DEFAULT_BOUNCE_ENABLED)) return
+        if (!categoryEnabled(context, PREF_BOUNCE_RETURN_ENABLED, DEFAULT_BOUNCE_RETURN_ENABLED)) return
         val a1 = scaled(context, PREF_BOUNCE_RETURN_STRENGTH, 112, 48, 210, DEFAULT_BOUNCE_RETURN_STRENGTH, strengthOverride)
         val a2 = scaled(context, PREF_BOUNCE_RETURN_STRENGTH, 66, 22, 138, DEFAULT_BOUNCE_RETURN_STRENGTH, strengthOverride)
         if (!vibratePattern(context, longArrayOf(0L, 16L, 30L, 11L), intArrayOf(0, a1, 0, a2))) {
@@ -220,12 +202,14 @@ object GamaHaptics {
         }
     }
 
-    /** Backwards-compatible alias used by older call-sites/previews. */
-    fun avoidanceBounce(context: Context, view: View, strengthOverride: Int? = null) {
-        avoidanceDodge(context, view, strengthOverride)
-    }
-
+    /**
+     * Success bloom after a completed action (dialog confirmations, resets).
+     * Part of the REGULAR family — gated by the same toggle and scaled by the
+     * same strength slider as everyday clicks, since it shares their amplitude
+     * source.
+     */
     fun success(context: Context, view: View) {
+        if (!categoryEnabled(context, PREF_REGULAR_ENABLED, DEFAULT_REGULAR_ENABLED)) return
         val a1 = scaled(context, PREF_REGULAR_STRENGTH, 94, 40, 166, DEFAULT_REGULAR_STRENGTH)
         val a2 = scaled(context, PREF_REGULAR_STRENGTH, 150, 70, 230, DEFAULT_REGULAR_STRENGTH)
         if (!vibratePattern(context, longArrayOf(0L, 18L, 36L, 26L), intArrayOf(0, a1, 0, a2))) {
@@ -233,17 +217,20 @@ object GamaHaptics {
         }
     }
 
-    fun warning(context: Context, view: View) {
-        val a1 = scaled(context, PREF_REGULAR_STRENGTH, 136, 60, 220, DEFAULT_REGULAR_STRENGTH)
-        val a2 = scaled(context, PREF_REGULAR_STRENGTH, 88, 38, 166, DEFAULT_REGULAR_STRENGTH)
-        if (!vibratePattern(context, longArrayOf(0L, 28L, 52L, 20L), intArrayOf(0, a1, 0, a2))) {
-            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        }
-    }
-
+    /**
+     * Rejection signature (failed switches, invalid input). Also REGULAR-family:
+     * previously this was the ONLY pattern with hardcoded amplitudes, so the
+     * strength slider silently did nothing for it and the category toggle could
+     * not turn it off.
+     * Amplitude ranges chosen to land near the old hardcoded 178/154/204 at the
+     * default strength while preserving the rising a1 < a3 emphasis.
+     */
     fun error(context: Context, view: View) {
-        if (!hapticsEnabled(context)) return
-        if (!vibratePattern(context, longArrayOf(0L, 24L, 44L, 24L, 44L, 30L), intArrayOf(0, 178, 0, 154, 0, 204))) {
+        if (!categoryEnabled(context, PREF_REGULAR_ENABLED, DEFAULT_REGULAR_ENABLED)) return
+        val a1 = scaled(context, PREF_REGULAR_STRENGTH, 178, 96, 250, DEFAULT_REGULAR_STRENGTH)
+        val a2 = scaled(context, PREF_REGULAR_STRENGTH, 154, 82, 220, DEFAULT_REGULAR_STRENGTH)
+        val a3 = scaled(context, PREF_REGULAR_STRENGTH, 204, 110, 255, DEFAULT_REGULAR_STRENGTH)
+        if (!vibratePattern(context, longArrayOf(0L, 24L, 44L, 24L, 44L, 30L), intArrayOf(0, a1, 0, a2, 0, a3))) {
             view.performHapticFeedback(HapticFeedbackConstants.REJECT)
         }
     }
@@ -256,6 +243,7 @@ object GamaHaptics {
             .putBoolean(PREF_RENDERER_ENABLED, DEFAULT_RENDERER_ENABLED)
             .putBoolean(PREF_LANGUAGE_ENABLED, DEFAULT_LANGUAGE_ENABLED)
             .putBoolean(PREF_BOUNCE_ENABLED, DEFAULT_BOUNCE_ENABLED)
+            .putBoolean(PREF_BOUNCE_RETURN_ENABLED, DEFAULT_BOUNCE_RETURN_ENABLED)
             .putInt(PREF_REGULAR_STRENGTH, DEFAULT_REGULAR_STRENGTH)
             .putInt(PREF_HOLD_STRENGTH, DEFAULT_HOLD_STRENGTH)
             .putInt(PREF_RENDERER_STRENGTH, DEFAULT_RENDERER_STRENGTH)

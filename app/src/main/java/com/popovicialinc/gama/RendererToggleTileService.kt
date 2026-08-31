@@ -48,8 +48,10 @@ class RendererToggleTileService : TileService() {
         super.onClick()
 
         val prefs = getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
-        val current = prefs.getString("last_renderer", "OpenGL") ?: "OpenGL"
-        val targetVulkan = current != "Vulkan"
+        RendererState.reconcileRebootReset(prefs)
+        val current = RendererState.getRenderer(prefs)
+        val targetVulkan = current != RendererState.RENDERER_VULKAN
+        val targetName = if (targetVulkan) RendererState.RENDERER_VULKAN else RendererState.RENDERER_OPENGL
 
         scope.launch {
             if (!ShizukuHelper.isBackendReady() && !ShizukuHelper.refreshRootAvailability()) {
@@ -60,7 +62,7 @@ class RendererToggleTileService : TileService() {
             setTile(Tile.STATE_ACTIVE, applicationContext.tileStr("tile", "state_switching", "Switching…"))
 
             try {
-                if (targetVulkan) {
+                val applied = if (targetVulkan) {
                     ShizukuHelper.runVulkanSuspend(
                         context = applicationContext,
                         aggressiveMode = prefs.getBoolean("aggressive_mode", false),
@@ -81,8 +83,18 @@ class RendererToggleTileService : TileService() {
                         onStatusUpdate = {}
                     )
                 }
-                prefs.edit().putString("last_renderer", if (targetVulkan) "Vulkan" else "OpenGL").apply()
-                setTile(Tile.STATE_ACTIVE, null)
+                if (applied) {
+                    // Persist renderer + both switch timestamps so BootReceiver
+                    // re-applies this choice after reboot. commit() because the
+                    // SystemUI soft-crash can kill this process mid-switch.
+                    RendererState.recordSwitch(prefs, targetName)
+                    setTile(Tile.STATE_ACTIVE, null)
+                } else {
+                    setTile(
+                        Tile.STATE_INACTIVE,
+                        applicationContext.tileStr("tile", "state_failed", "Failed — tap to retry")
+                    )
+                }
             } catch (_: Exception) {
                 setTile(Tile.STATE_INACTIVE, applicationContext.tileStr("tile", "state_failed", "Failed — tap to retry"))
             }
@@ -100,9 +112,10 @@ class RendererToggleTileService : TileService() {
     }
 
     private fun currentRendererSubtitle(): String {
-        val renderer = getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
-            .getString("last_renderer", "OpenGL") ?: "OpenGL"
-        return if (renderer == "Vulkan") {
+        val prefs = getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
+        RendererState.reconcileRebootReset(prefs)
+        val renderer = RendererState.getRenderer(prefs)
+        return if (renderer == RendererState.RENDERER_VULKAN) {
             applicationContext.tileStr("tile", "state_vulkan", "Vulkan · tap for OpenGL")
         } else {
             applicationContext.tileStr("tile", "state_opengl", "OpenGL · tap for Vulkan")

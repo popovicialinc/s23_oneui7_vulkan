@@ -13,3 +13,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release signing credentials — never commit these (see keystore.properties.example)
+keystore.properties
+*.keystore
+*.jks
+
+# Generated release outputs and local compiler diagnostics
+/app/release/
+/.kotlin/errors/
+*.backup

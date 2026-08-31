@@ -121,8 +121,8 @@ import kotlin.math.roundToInt
  * This ensures consistency across all disabled cards in the app.
  *
  * Standard disabled style:
- * - Scale: 0.88f (zoom-in effect)
- * - Alpha: 0.32f (transparency)
+ * - Scale: 0.85f (zoom-in effect)
+ * - Alpha: 0.25f (transparency)
  * - Smooth animated transitions
  *
  * @param enabled Whether the card is enabled (true) or disabled (false)
@@ -135,7 +135,7 @@ fun DisabledCardWrapper(
 ) {
     val animSpeed = LocalAnimationSpeed.current
     val disabledScale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.88f,
+        targetValue = if (enabled) 1f else 0.85f,
         animationSpec = spring(
             dampingRatio = 0.60f,
             stiffness = MotionTokens.SpeedUtil.stiffness(440f, animSpeed)
@@ -143,7 +143,7 @@ fun DisabledCardWrapper(
         label = "disabled_card_scale"
     )
     val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.32f,
+        targetValue = if (enabled) 1f else 0.25f,
         animationSpec = tween(
             durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
             easing = MotionTokens.Easing.emphasized
@@ -178,7 +178,7 @@ fun SettingsNavigationCard(
     val animSpeed = LocalAnimationSpeed.current
 
     val disabledScale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.88f,
+        targetValue = if (enabled) 1f else 0.85f,
         animationSpec = spring(
             dampingRatio = 0.60f,
             stiffness = MotionTokens.SpeedUtil.stiffness(440f, animSpeed)
@@ -186,7 +186,7 @@ fun SettingsNavigationCard(
         label = "settings_nav_disabled_scale"
     )
     val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.32f,
+        targetValue = if (enabled) 1f else 0.25f,
         animationSpec = tween(
             durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
             easing = MotionTokens.Easing.emphasized
@@ -1030,7 +1030,7 @@ fun ToggleCard(
     val ts = LocalTypeScale.current
     val animSpeed = LocalAnimationSpeed.current
     val scale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.88f,
+        targetValue = if (enabled) 1f else 0.85f,
         animationSpec = spring(
             dampingRatio = 0.58f,
             stiffness = MotionTokens.SpeedUtil.stiffness(430f, animSpeed)
@@ -1039,7 +1039,7 @@ fun ToggleCard(
     )
 
     val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.32f,
+        targetValue = if (enabled) 1f else 0.25f,
         animationSpec = tween(
             durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
             easing = MotionTokens.Easing.emphasized

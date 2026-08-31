@@ -112,7 +112,7 @@ fun EffectsPanel(
         }
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
             SettingsNavigationCard(
-                title = LocalStrings.current["particles.toggle"].ifEmpty { "PARTICLES" }, description = LocalStrings.current["effects.particles_desc"].ifEmpty { "Floating dots, twinkling stars, or Matrix rain — choose your style" },
+                title = LocalStrings.current["particles.toggle"].ifEmpty { "PARTICLES" }, description = LocalStrings.current["particles.toggle_desc"].ifEmpty { "Gives the app a living feel" },
                 onClick = { performHaptic(); onParticlesClick() },
                 isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
             )

@@ -55,7 +55,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -68,14 +67,17 @@ internal fun HapticPreviewButton(
     onClick: () -> Unit,
     colors: ThemeColors,
     oledMode: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPress: (() -> Long)? = null,
+    onRelease: ((startedAtMs: Long, released: Boolean) -> Unit)? = null,
+    enabled: Boolean = true
 ) {
     val ts = LocalTypeScale.current
     val context = LocalContext.current
     val view = LocalView.current
     val animLevel = LocalAnimationLevel.current
     val animSpeed = LocalAnimationSpeed.current
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(16.dp)
     var isPressed by remember { mutableStateOf(false) }
     val pressProgress by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
@@ -91,20 +93,29 @@ internal fun HapticPreviewButton(
 
     Box(
         modifier = modifier
-            .height(54.dp)
+            .height(48.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale)
+            .then(if (!enabled) Modifier.graphicsLayer(alpha = 0.25f, scaleX = 0.85f, scaleY = 0.85f) else Modifier)
             .clip(shape)
             .background(if (oledMode) Color.Black else colors.cardBackground)
             .border(borderWidth, colors.primaryAccent.copy(alpha = borderAlpha), shape)
-            .pointerInput(Unit) {
+            .then(if (!enabled) Modifier.pointerInput(enabled) { detectTapGestures { } } else Modifier)
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
                 detectTapGestures(
                     onPress = {
-                        val startedAt = GamaHaptics.pressStart(context, view)
+                        val startedAt = onPress?.invoke() ?: SystemClock.uptimeMillis()
                         isPressed = true
                         val released = tryAwaitRelease()
                         isPressed = false
-                        GamaHaptics.releaseAfterPress(context, view, startedAt, released)
-                        if (released) onClick()
+                        if (onRelease != null) {
+                            onRelease(startedAt, released)
+                        } else if (released) {
+                            // Preview buttons play exactly the pattern selected
+                            // by the caller; do not inject an extra generic
+                            // contact/hold haptic before or after it.
+                            onClick()
+                        }
                     }
                 )
             },
@@ -113,10 +124,10 @@ internal fun HapticPreviewButton(
         Text(
             text = text,
             color = colors.primaryAccent,
-            fontSize = ts.buttonLarge,
+            fontSize = ts.labelLarge,
             fontWeight = FontWeight.Bold,
             fontFamily = quicksandFontFamily,
-            letterSpacing = 1.4.sp
+            letterSpacing = 1.1.sp
         )
     }
 }
@@ -134,13 +145,16 @@ internal fun HapticStrengthCard(
     colors: ThemeColors,
     cardBackground: Color,
     oledMode: Boolean,
-    isSmallScreen: Boolean
+    isSmallScreen: Boolean,
+    available: Boolean = true
 ) {
     val ts = LocalTypeScale.current
     var lastSliderPreviewAtMs by remember { mutableStateOf(0L) }
+    DisabledCardWrapper(enabled = available) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (!available) Modifier.pointerInput(available) { detectTapGestures { } } else Modifier)
             .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(28.dp)),
         colors = CardDefaults.cardColors(containerColor = cardBackground),
         shape = RoundedCornerShape(28.dp),
@@ -208,7 +222,8 @@ internal fun HapticStrengthCard(
                 )
                 Switch(
                     checked = enabled,
-                    onCheckedChange = onEnabledChange,
+                    onCheckedChange = { if (available) onEnabledChange(it) },
+                    enabled = available,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = colors.primaryAccent,
                         checkedTrackColor = colors.primaryAccent.copy(alpha = 0.35f),
@@ -221,6 +236,7 @@ internal fun HapticStrengthCard(
             Slider(
                 value = value.toFloat(),
                 onValueChange = {
+                    if (!available) return@Slider
                     val next = it.roundToInt().coerceIn(0, 100)
                     onValueChange(next)
                     val now = SystemClock.uptimeMillis()
@@ -232,6 +248,7 @@ internal fun HapticStrengthCard(
                 onValueChangeFinished = { previewAtValue?.invoke(value) ?: preview() },
                 valueRange = 0f..100f,
                 steps = 9,
+                enabled = available,
                 colors = SliderDefaults.colors(
                     thumbColor = colors.primaryAccent,
                     activeTrackColor = colors.primaryAccent,
@@ -246,9 +263,11 @@ internal fun HapticStrengthCard(
                 onClick = preview,
                 colors = colors,
                 oledMode = oledMode,
+                enabled = available,
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
     }
 }
 
@@ -268,6 +287,8 @@ fun HapticsPanel(
     onLanguageEnabledChange: (Boolean) -> Unit,
     bounceEnabled: Boolean,
     onBounceEnabledChange: (Boolean) -> Unit,
+    bounceReturnEnabled: Boolean,
+    onBounceReturnEnabledChange: (Boolean) -> Unit,
     regularStrength: Int,
     onRegularStrengthChange: (Int) -> Unit,
     holdStrength: Int,
@@ -295,17 +316,20 @@ fun HapticsPanel(
     val view = LocalView.current
     var section by remember { mutableStateOf("overview") }
 
+    fun parentSection(current: String): String = when (current) {
+        "dodge", "return" -> "layout"
+        else -> "overview"
+    }
+
     BackHandler(enabled = visible && section != "overview") {
-        section = "overview"
+        section = parentSection(section)
     }
 
     val title = when (section) {
         "core" -> strings["haptics.core_title"].ifEmpty { "CORE FEEL" }
-        "actions" -> strings["haptics.actions_title"].ifEmpty { "ACTION HAPTICS" }
         "layout" -> strings["haptics.layout_title"].ifEmpty { "LAYOUT MOTION" }
         "dodge" -> strings["haptics.dodge_left"].ifEmpty { "DODGE LEFT" }
         "return" -> strings["haptics.return_settle"].ifEmpty { "RETURN SETTLE" }
-        "preview" -> strings["haptics.preview_lab"].ifEmpty { "PREVIEW LAB" }
         "reset" -> strings["haptics.reset_title"].ifEmpty { "RESET HAPTICS" }
         else -> strings["haptics.title"].ifEmpty { "HAPTICS" }
     }
@@ -313,7 +337,7 @@ fun HapticsPanel(
     PanelScaffold(
         visible = visible,
         onDismiss = {
-            if (section == "overview") onDismiss() else section = "overview"
+            if (section == "overview") onDismiss() else section = parentSection(section)
         },
         isLandscape = isLandscape,
         isSmallScreen = isSmallScreen,
@@ -327,19 +351,26 @@ fun HapticsPanel(
             visible = visible,
             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
             colors = colors,
-            scrollOffset = scrollState.value
+            scrollState = scrollState
         )
 
         key("haptics_caption_$section") {
-            AnimatedElement(visible = visible, staggerIndex = 1, totalItems = 8) {
+            // Stagger totals below INCLUDE this caption (index 1), matching the
+            // settings-hub convention so every section animates caption → cards
+            // as one continuous sequence.
+            AnimatedElement(visible = visible, staggerIndex = 1, totalItems = when (section) {
+                "overview" -> 5
+                "core" -> 5
+                "layout" -> 5
+                "reset" -> 4
+                else -> 3   // dodge, return
+            }) {
                 PanelCaption(
                     text = when (section) {
                 "core" -> strings["haptics.core_caption"].ifEmpty { "Everyday tactile language: quick taps, first contact, and the stronger bloom after a deliberate hold." }
-                "actions" -> strings["haptics.actions_caption"].ifEmpty { "Special signatures for important actions. Renderer switches and language changes should feel different from regular UI." }
                 "layout" -> strings["haptics.layout_caption"].ifEmpty { "Mechanical feedback for visual motion. Open each motion pattern separately so the main panel stays clean." }
                 "dodge" -> strings["haptics.dodge_left_desc"].ifEmpty { "Gentle tick when a card rescales or moves left to avoid the floating back button." }
                 "return" -> strings["haptics.return_settle_desc"].ifEmpty { "Stronger settling pulse when the card returns to normal width. This should feel like the UI snapping home." }
-                "preview" -> strings["haptics.preview_lab_desc"].ifEmpty { "Clone controls that do nothing except let you feel the app's haptic language safely." }
                 "reset" -> strings["haptics.reset_caption"].ifEmpty { "Restore the factory GAMA haptics profile if the feel gets messy." }
                         else -> strings["haptics.caption"].ifEmpty { "GAMA has no sound effects by design, so this is the mechanical side of the interface. Tune it like a tiny physical instrument." }
                     },
@@ -351,7 +382,7 @@ fun HapticsPanel(
         key(section) {
             when (section) {
             "overview" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 6) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
                     ToggleCard(
                         title = strings["haptics.engine"].ifEmpty { "HAPTICS ENGINE" },
                         description = strings["haptics.engine_desc"].ifEmpty { "Master switch for every custom vibration pattern in the app." },
@@ -365,7 +396,7 @@ fun HapticsPanel(
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 6) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
                     SettingsNavigationCard(
                         title = strings["haptics.core_title"].ifEmpty { "CORE FEEL" },
                         description = strings["haptics.core_desc"].ifEmpty { "Regular clicks, first-contact feedback, and press-and-hold release blooms." },
@@ -373,23 +404,12 @@ fun HapticsPanel(
                         isSmallScreen = isSmallScreen,
                         colors = colors,
                         cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 6) {
-                    SettingsNavigationCard(
-                        title = strings["haptics.actions_title"].ifEmpty { "ACTION HAPTICS" },
-                        description = strings["haptics.actions_desc"].ifEmpty { "Dedicated patterns for Vulkan/OpenGL and language changes." },
-                        onClick = { performHaptic(); section = "actions" },
-                        isSmallScreen = isSmallScreen,
-                        colors = colors,
-                        cardBackground = cardBackground,
-                        oledMode = oledMode
-                    )
-                }
-
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 6) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
                     SettingsNavigationCard(
                         title = strings["haptics.layout_title"].ifEmpty { "LAYOUT MOTION" },
                         description = strings["haptics.layout_desc"].ifEmpty { "Dodge-left and return-to-normal vibrations for back-button avoidance." },
@@ -397,23 +417,12 @@ fun HapticsPanel(
                         isSmallScreen = isSmallScreen,
                         colors = colors,
                         cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 6) {
-                    SettingsNavigationCard(
-                        title = strings["haptics.preview_lab"].ifEmpty { "PREVIEW LAB" },
-                        description = strings["haptics.preview_lab_desc"].ifEmpty { "Use each sub-panel's clone buttons and sliders to feel changes instantly. The clones do not trigger actions." },
-                        onClick = { performHaptic(); section = "preview" },
-                        isSmallScreen = isSmallScreen,
-                        colors = colors,
-                        cardBackground = cardBackground,
-                        oledMode = oledMode
-                    )
-                }
-
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 6, totalItems = 6) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 5) {
                     SettingsNavigationCard(
                         title = strings["haptics.reset_title"].ifEmpty { "RESET HAPTICS" },
                         description = strings["haptics.reset_desc"].ifEmpty { "Go back to GAMA's default premium vibration profile." },
@@ -421,13 +430,14 @@ fun HapticsPanel(
                         isSmallScreen = isSmallScreen,
                         colors = colors,
                         cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled
                     )
                 }
             }
 
             "core" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 6) {
                     HapticStrengthCard(
                         title = strings["haptics.regular_clicks"].ifEmpty { "REGULAR CLICKS" },
                         description = strings["haptics.regular_clicks_desc"].ifEmpty { "The light contact tick for normal settings cards and quick buttons. It should be clean, not buzzy." },
@@ -440,11 +450,12 @@ fun HapticsPanel(
                         colors = colors,
                         cardBackground = cardBackground,
                         oledMode = oledMode,
-                        isSmallScreen = isSmallScreen
+                        isSmallScreen = isSmallScreen,
+                        available = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 6) {
                     HapticStrengthCard(
                         title = strings["haptics.hold_release"].ifEmpty { "HOLD RELEASE BLOOM" },
                         description = strings["haptics.hold_release_desc"].ifEmpty { "The stronger second pulse after a deliberate press-and-hold. This should clearly contrast with a quick tap." },
@@ -457,35 +468,30 @@ fun HapticsPanel(
                         colors = colors,
                         cardBackground = cardBackground,
                         oledMode = oledMode,
-                        isSmallScreen = isSmallScreen
-                    )
-                }
-
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
-                    SettingsNavigationCard(
-                        title = strings["haptics.press_hold_test"].ifEmpty { "PRESS & HOLD TEST" },
-                        description = strings["haptics.press_hold_test_desc"].ifEmpty { "Hold this clone, then release. Quick taps should be one click; deliberate holds should bloom clearly." },
-                        onClick = { /* haptics are handled by the card surface itself */ },
                         isSmallScreen = isSmallScreen,
-                        colors = colors,
-                        cardBackground = cardBackground,
-                        oledMode = oledMode
+                        available = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4) {
+                AnimatedElement(visible = visible, cardShadow = false, staggerIndex = 4, totalItems = 5) {
                     HapticPreviewButton(
-                        text = strings["haptics.quick_tap_preview"].ifEmpty { "QUICK TAP PREVIEW" },
-                        onClick = { GamaHaptics.lightClick(context, view) },
+                        text = strings["haptics.press_hold_test"].ifEmpty { "TEST HAPTICS HERE" },
+                        onClick = {},
+                        onPress = { GamaHaptics.pressStart(context, view) },
+                        onRelease = { startedAt, released ->
+                            GamaHaptics.releaseAfterPress(context, view, startedAt, released)
+                        },
                         colors = colors,
                         oledMode = oledMode,
+                        enabled = hapticsEnabled,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+
             }
 
             "actions" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
                     HapticStrengthCard(
                         title = strings["haptics.renderer"].ifEmpty { "VULKAN / OPENGL" },
                         description = strings["haptics.renderer_desc"].ifEmpty { "A firmer renderer intent click. First contact is immediate; the commit pulse is more decisive." },
@@ -502,7 +508,7 @@ fun HapticsPanel(
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
                     HapticStrengthCard(
                         title = strings["haptics.language_change"].ifEmpty { "LANGUAGE CHANGE" },
                         description = strings["haptics.language_change_desc"].ifEmpty { "A small signature pattern when the app language actually changes." },
@@ -519,7 +525,7 @@ fun HapticsPanel(
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = false, staggerIndex = 4, totalItems = 5) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HapticPreviewButton(
                             text = strings["haptics.vulkan_clone"].ifEmpty { "VULKAN CLONE" },
@@ -540,7 +546,7 @@ fun HapticsPanel(
             }
 
             "layout" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
                     SettingsNavigationCard(
                         title = strings["haptics.dodge_left"].ifEmpty { "DODGE LEFT" },
                         description = strings["haptics.dodge_left_desc"].ifEmpty { "Gentle tick when cards dodge away from the floating back button." },
@@ -548,11 +554,12 @@ fun HapticsPanel(
                         isSmallScreen = isSmallScreen,
                         colors = colors,
                         cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
                     SettingsNavigationCard(
                         title = strings["haptics.return_settle"].ifEmpty { "RETURN SETTLE" },
                         description = strings["haptics.return_settle_desc"].ifEmpty { "Stronger pulse when dodged cards return to normal width." },
@@ -560,17 +567,19 @@ fun HapticsPanel(
                         isSmallScreen = isSmallScreen,
                         colors = colors,
                         cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HapticPreviewButton(
                             text = strings["haptics.dodge_preview"].ifEmpty { "DODGE" },
                             onClick = { GamaHaptics.avoidanceDodge(context, view) },
                             colors = colors,
                             oledMode = oledMode,
+                            enabled = hapticsEnabled,
                             modifier = Modifier.weight(1f)
                         )
                         HapticPreviewButton(
@@ -578,6 +587,7 @@ fun HapticsPanel(
                             onClick = { GamaHaptics.avoidanceReturn(context, view) },
                             colors = colors,
                             oledMode = oledMode,
+                            enabled = hapticsEnabled,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -585,7 +595,7 @@ fun HapticsPanel(
             }
 
             "dodge" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 1) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3) {
                     HapticStrengthCard(
                         title = strings["haptics.dodge_left"].ifEmpty { "DODGE LEFT" },
                         description = strings["haptics.dodge_left_desc"].ifEmpty { "Gentle tick when a card rescales or moves left to avoid the floating back button." },
@@ -598,32 +608,34 @@ fun HapticsPanel(
                         colors = colors,
                         cardBackground = cardBackground,
                         oledMode = oledMode,
+                        available = hapticsEnabled,
                         isSmallScreen = isSmallScreen
                     )
                 }
             }
 
             "return" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 1) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3) {
                     HapticStrengthCard(
                         title = strings["haptics.return_settle"].ifEmpty { "RETURN SETTLE" },
                         description = strings["haptics.return_settle_desc"].ifEmpty { "Stronger settling pulse when the card returns to normal width. This should feel like the UI snapping home." },
                         value = bounceReturnStrength,
                         onValueChange = onBounceReturnStrengthChange,
-                        enabled = bounceEnabled,
-                        onEnabledChange = onBounceEnabledChange,
+                        enabled = bounceReturnEnabled,
+                        onEnabledChange = onBounceReturnEnabledChange,
                         preview = { GamaHaptics.avoidanceReturn(context, view) },
                         previewAtValue = { GamaHaptics.avoidanceReturn(context, view, it) },
                         colors = colors,
                         cardBackground = cardBackground,
                         oledMode = oledMode,
+                        available = hapticsEnabled,
                         isSmallScreen = isSmallScreen
                     )
                 }
             }
 
             "preview" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HapticPreviewButton(
                             text = strings["haptics.quick_tap_preview"].ifEmpty { "QUICK TAP" },
@@ -642,7 +654,7 @@ fun HapticsPanel(
                     }
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HapticPreviewButton(
                             text = strings["haptics.language_clone"].ifEmpty { "LANGUAGE" },
@@ -661,21 +673,24 @@ fun HapticsPanel(
                     }
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 3) {
-                    SettingsNavigationCard(
-                        title = strings["haptics.press_hold_test"].ifEmpty { "PRESS & HOLD TEST" },
-                        description = strings["haptics.press_hold_test_desc"].ifEmpty { "Hold this clone, then release. Quick taps should be one click; deliberate holds should bloom clearly." },
-                        onClick = { },
-                        isSmallScreen = isSmallScreen,
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
+                    HapticPreviewButton(
+                        text = strings["haptics.press_hold_test"].ifEmpty { "PRESS & HOLD TEST" },
+                        onClick = {},
+                        onPress = { GamaHaptics.pressStart(context, view) },
+                        onRelease = { startedAt, released ->
+                            GamaHaptics.releaseAfterPress(context, view, startedAt, released)
+                        },
                         colors = colors,
-                        cardBackground = cardBackground,
-                        oledMode = oledMode
+                        oledMode = oledMode,
+                        enabled = hapticsEnabled,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
 
             "reset" -> {
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
                     SettingsNavigationCard(
                         title = strings["haptics.restore_default"].ifEmpty { "RESTORE DEFAULT PROFILE" },
                         description = strings["haptics.restore_default_desc"].ifEmpty { "Resets all haptic toggles and strengths to the default GAMA feel." },
@@ -691,7 +706,7 @@ fun HapticsPanel(
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
                     PanelCaption(
                         text = strings["haptics.defaults_note"].ifEmpty { "Defaults are tuned for a flagship-style linear vibration motor: light quick taps, clear hold bloom, firmer renderer commits, and separate dodge/return motion." },
                         colors = colors

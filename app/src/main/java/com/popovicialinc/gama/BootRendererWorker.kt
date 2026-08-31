@@ -42,7 +42,7 @@ class BootRendererWorker(
 
     override suspend fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences("gama_prefs", Context.MODE_PRIVATE)
-        val savedRenderer = prefs.getString("last_renderer", "OpenGL") ?: "OpenGL"
+        val savedRenderer = RendererState.getDesiredRenderer(prefs)
 
         val propValue = when (savedRenderer) {
             "Vulkan" -> "skiavk"
@@ -77,9 +77,10 @@ class BootRendererWorker(
         val success = !result.startsWith("Error")
 
         return if (success) {
-            prefs.edit()
-                .putLong("last_switch_uptime", android.os.SystemClock.elapsedRealtime())
-                .apply()
+            // Refresh the session stamps so offline reboot detection knows the
+            // prop matches the CURRENT boot (renderer pref stays as saved).
+            RendererState.stampRestore(prefs, savedRenderer)
+            ShizukuHelper.refreshRendererViewSync(applicationContext)
             notifyBootResult(applicationContext, success = true, renderer = savedRenderer)
             Result.success()
         } else {
@@ -89,9 +90,8 @@ class BootRendererWorker(
             when {
                 current == savedRenderer -> {
                     // Already set — nothing to do, just stamp the uptime and succeed silently.
-                    prefs.edit()
-                        .putLong("last_switch_uptime", android.os.SystemClock.elapsedRealtime())
-                        .apply()
+                    RendererState.stampRestore(prefs, savedRenderer)
+                    ShizukuHelper.refreshRendererViewSync(applicationContext)
                     Result.success()
                 }
                 current == "Unknown" -> {

@@ -316,6 +316,7 @@ fun MatrixRainOverlay(
     // IMPORTANT: declared before the early-return so the render loop can start
     // on the very first composition and drive the alpha animation forward.
     var frameCount by remember { mutableLongStateOf(0L) }
+    var canvasHeightPx by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(enabled, columns, screenHeightPx, fontSizePx) {
         if (enabled) {
@@ -345,7 +346,7 @@ fun MatrixRainOverlay(
     // Zero allocations inside the loop — only integer arithmetic.
     // IMPORTANT: this LaunchedEffect must live before the early-return so that
     // the physics loop is already running when the alpha animation completes.
-    LaunchedEffect(columns, enabled, physicsHz, motionFactor) {
+    LaunchedEffect(columns, enabled, physicsHz, motionFactor, canvasHeightPx) {
         if (!enabled && overlayAlpha < 0.005f && motionFactor < 0.005f) return@LaunchedEffect
         withContext(Dispatchers.Default) {
             val targetNs = physicsTargetNs
@@ -355,7 +356,8 @@ fun MatrixRainOverlay(
                 val elapsed = now - lastTick
                 if (elapsed >= targetNs) {
                     lastTick = now
-                    val rowsOnScreen = (screenHeightPx / fontSizePx).toInt() + 1
+                    val viewportHeightPx = if (canvasHeightPx > 0) canvasHeightPx.toFloat() else screenHeightPx
+                    val spawnRows = (viewportHeightPx / fontSizePx).toInt() + 1
                     val speedDivisor = 1f + (1f - motionFactor) * 10f
                     for (col in columns) {
                         col.tickAccum++
@@ -363,8 +365,15 @@ fun MatrixRainOverlay(
                         if (col.tickAccum >= effectiveTicksPerStep) {
                             col.tickAccum = 0
                             col.headRow++
-                            if (col.headRow - col.trailSlots > rowsOnScreen) {
-                                col.headRow = -(kotlin.random.Random.nextFloat() * rowsOnScreen * 0.7f).toInt()
+                            // Slot 0 is the head at the bottom of the column;
+                            // the last slot is the top-most trailing character.
+                            // Recycle only when that top-most character reaches
+                            // the bottom of the real Canvas, so the entire
+                            // column has visibly crossed the screen.
+                            val columnSize = fontSizePx * (0.45f + col.depth * 0.55f)
+                            val topMostRow = col.headRow - (col.chars.size - 1)
+                            if (topMostRow * columnSize >= viewportHeightPx) {
+                                col.headRow = -(kotlin.random.Random.nextFloat() * spawnRows * 0.7f).toInt()
                                 for (k in col.chars.indices) col.chars[k] = randomMatrixChar()
                             }
                         }
@@ -477,14 +486,16 @@ fun MatrixRainOverlay(
     }
 
     // ── Canvas ────────────────────────────────────────────────────────────────
-    val currentFrame = frameCount
-
     Canvas(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { canvasHeightPx = it.height }
             .graphicsLayer(alpha = overlayAlpha)
     ) {
-        @Suppress("UNUSED_EXPRESSION") currentFrame
+        // Draw-phase read of frameCount: subscribes this Canvas to REDRAW only.
+        // Previously the counter was read in composition, which recomposed the
+        // entire MatrixRainOverlay subtree on every physics tick (~60 Hz).
+        @Suppress("UNUSED_EXPRESSION") frameCount
         // drawContext.canvas.nativeCanvas — stays hardware-accelerated.
         // drawIntoCanvas { } here would force software rendering for the entire
         // matrix Canvas on every frame, same root cause as the star mode lag.

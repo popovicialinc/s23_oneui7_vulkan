@@ -34,10 +34,9 @@
 -assumenosideeffects class android.util.Log {
     public static *** *(...);
 }
--assumenosideeffects class kotlin.jvm.internal.Intrinsics {
-    static void check*(...);
-    static void throw*(...);
-}
+# Keep Kotlin null checks in release builds. Removing Intrinsics checks turns
+# malformed state into opaque later NPEs and makes release-only crashes harder
+# to diagnose.
 -assumenosideeffects class androidx.compose.runtime.ComposerKt {
     void sourceInformation(...);
     void sourceInformationMarkerStart(...);

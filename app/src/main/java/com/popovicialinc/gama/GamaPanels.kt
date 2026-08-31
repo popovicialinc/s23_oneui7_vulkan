@@ -104,7 +104,7 @@ fun VisualEffectsPanel(
         CleanTitle(
             text = LocalStrings.current["particles.appearance_title"].ifEmpty { "VISUALS" },
             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
-            colors = colors, scrollOffset = scrollState.value
+            colors = colors, scrollState = scrollState
         )
 
         // EFFECTS and COLORS — at the top so they're always easy to reach
@@ -570,7 +570,7 @@ fun MatrixSettingsPanel(
         oledMode = oledMode, colors = colors
     ) { _ ->
         CleanTitle(
-            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX\nSETTINGS" },
+            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX SETTINGS" },
             fontSize = if (isLandscape) ts.displaySmall else ts.displayMedium,
             colors   = colors
         )

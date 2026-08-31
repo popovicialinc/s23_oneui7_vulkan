@@ -1,6 +1,5 @@
 package com.popovicialinc.gama
 
-import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,6 +17,17 @@ import java.util.Locale
  *
  * File naming convention: GAMA_backup_YYYY-MM-DD.json
  * so users can keep multiple dated backups and instantly recognise them.
+ *
+ * KEY REGISTRY — keep in sync with the writers in GamaUI.savePreferences(),
+ * GamaHaptics.PREF_*, RendererState, and GamaLocalization.PREF_KEY:
+ *  - Every user-facing setting is included.
+ *  - Device/session-specific state is deliberately EXCLUDED because restoring it
+ *    on another device would be wrong or harmful:
+ *      prefs_version            (migration bookkeeping)
+ *      last_switch_uptime       (elapsedRealtime — meaningless on another device)
+ *      last_switch_time         ("X ago" label would lie after a restore)
+ *      notif_perm_requested     (would suppress the permission prompt on the new device)
+ *      button_labels_shown / title_shimmer_played (first-launch cosmetics)
  */
 object BackupHelper {
 
@@ -26,23 +36,54 @@ object BackupHelper {
         "animation_level", "particle_speed", "particle_parallax_sensitivity",
         "particle_count", "particle_count_custom", "theme_preference",
         "custom_accent", "custom_gradient_start", "custom_gradient_end",
-        "ui_scale", "oled_accent_color", "notif_interval_idx"
+        "ui_scale", "oled_accent_color", "notif_interval_idx",
+        // Haptics strengths
+        GamaHaptics.PREF_REGULAR_STRENGTH,
+        GamaHaptics.PREF_HOLD_STRENGTH,
+        GamaHaptics.PREF_RENDERER_STRENGTH,
+        GamaHaptics.PREF_LANGUAGE_STRENGTH,
+        GamaHaptics.PREF_BOUNCE_STRENGTH,
+        GamaHaptics.PREF_BOUNCE_RETURN_STRENGTH,
+        // Matrix tuning
+        "matrix_speed", "matrix_density", "matrix_font_size", "matrix_fade_length"
     )
     private val BOOLEAN_KEYS = listOf(
         "gradient_enabled", "particles_enabled", "particle_parallax_enabled",
-        "particle_star_mode", "particle_time_mode", "blur_enabled", "blur_optimised",
+        "particle_star_mode", "particle_time_mode", "blur_enabled",
         "use_dynamic_color", "verbose_mode", "aggressive_mode",
-        "kill_launcher", "kill_keyboard",
-        "oled_mode", "use_dynamic_color_oled", "dismiss_on_click_outside",
-        "notif_enabled", "show_gpuwatch_button", "stagger_enabled",
-        "native_refresh_rate", "quarter_refresh_rate",
-        // Previously missing — added to ensure round-trip fidelity
-        "advanced_color_picker"
+        "kill_launcher", "kill_keyboard", "show_gpuwatch_button",
+        "stagger_enabled", "back_button_avoidance_enabled", "back_button_inversed",
+        "shadows_enabled", "advanced_color_picker", "dismiss_on_click_outside",
+        "notif_enabled", "oled_mode", "use_dynamic_color_oled",
+        // Particle refresh-rate switches
+        "particle_native_refresh_rate", "particle_quarter_refresh_rate",
+        // Matrix toggles (matrix_mode is a Boolean pref despite its name — see GamaUI)
+        "matrix_mode", "matrix_native_refresh_rate", "matrix_quarter_refresh_rate",
+        // Haptics category switches
+        GamaHaptics.PREF_ENABLED,
+        GamaHaptics.PREF_REGULAR_ENABLED,
+        GamaHaptics.PREF_HOLD_ENABLED,
+        GamaHaptics.PREF_RENDERER_ENABLED,
+        GamaHaptics.PREF_LANGUAGE_ENABLED,
+        GamaHaptics.PREF_BOUNCE_ENABLED,
+        GamaHaptics.PREF_BOUNCE_RETURN_ENABLED
     )
-    private val FLOAT_KEYS = listOf("time_offset_hours")
-    private val LONG_KEYS  = listOf("notif_last_sent")
-    private val STRING_KEYS = listOf("user_name", "last_renderer")
+    private val FLOAT_KEYS = listOf("time_offset_hours", "matrix_bg_alpha")
+    private val LONG_KEYS = listOf("notif_last_sent")
+    private val STRING_KEYS = listOf(
+        "user_name", RendererState.PREF_LAST_RENDERER, "selected_language"
+    )
     private val STRING_SET_KEYS = listOf("excluded_apps")
+
+    // Read-only registry access for the unit-test suite (same module) so the
+    // round-trip test can cover every registered key with correct typing.
+    internal fun registeredKeysForTesting(): Set<String> =
+        (INT_KEYS + BOOLEAN_KEYS + FLOAT_KEYS + LONG_KEYS + STRING_KEYS + STRING_SET_KEYS).toSet()
+    internal fun isRegisteredStringSetKey(key: String) = key in STRING_SET_KEYS
+    internal fun isRegisteredStringKey(key: String) = key in STRING_KEYS
+    internal fun isRegisteredFloatKey(key: String) = key in FLOAT_KEYS
+    internal fun isRegisteredLongKey(key: String) = key in LONG_KEYS
+    internal fun isRegisteredBooleanKey(key: String) = key in BOOLEAN_KEYS
 
     /** Generate a timestamped filename like "GAMA_backup_2025-06-14.json" */
     fun buildFileName(): String {
@@ -51,7 +92,7 @@ object BackupHelper {
     }
 
     /**
-     * Export — read every key from [prefs] and return a compact JSON string.
+     * Export — read every key from [prefs] and return a pretty-printed JSON string.
      * Runs on [Dispatchers.IO] so SharedPreferences reads never block the main thread.
      * @throws Exception if serialisation fails.
      */
@@ -59,16 +100,17 @@ object BackupHelper {
         val root = JSONObject()
 
         // Version stamp — lets future GAMA versions handle schema migrations
-        root.put("gama_backup_version", 1)
+        root.put("gama_backup_version", 2)
         root.put("exported_at", System.currentTimeMillis())
 
-        INT_KEYS.forEach    { key -> if (prefs.contains(key)) root.put(key, prefs.getInt(key, 0)) }
-        BOOLEAN_KEYS.forEach{ key -> if (prefs.contains(key)) root.put(key, prefs.getBoolean(key, false)) }
-        FLOAT_KEYS.forEach  { key -> if (prefs.contains(key)) root.put(key, prefs.getFloat(key, 0f).toDouble()) }
-        LONG_KEYS.forEach   { key -> if (prefs.contains(key)) root.put(key, prefs.getLong(key, 0L)) }
+        INT_KEYS.forEach { key -> if (prefs.contains(key)) root.put(key, prefs.getInt(key, 0)) }
+        BOOLEAN_KEYS.forEach { key -> if (prefs.contains(key)) root.put(key, prefs.getBoolean(key, false)) }
+        FLOAT_KEYS.forEach { key -> if (prefs.contains(key)) root.put(key, prefs.getFloat(key, 0f).toDouble()) }
+        LONG_KEYS.forEach { key -> if (prefs.contains(key)) root.put(key, prefs.getLong(key, 0L)) }
         STRING_KEYS.forEach { key -> if (prefs.contains(key)) root.put(key, prefs.getString(key, "") ?: "") }
 
         STRING_SET_KEYS.forEach { key ->
+            if (!prefs.contains(key)) return@forEach
             val set = prefs.getStringSet(key, emptySet()) ?: emptySet()
             val arr = JSONArray()
             set.forEach { arr.put(it) }
@@ -80,7 +122,12 @@ object BackupHelper {
 
     /**
      * Import — parse [json] and write every recognised key back into [prefs].
-     * Unknown keys are silently ignored so forward-compatible backups work.
+     *
+     * Accepts backups from v1 (older installs; they simply carry fewer keys).
+     * Unknown keys are ignored so forward-compatible backups work. Each key is
+     * restored independently: one corrupt value skips that key instead of
+     * aborting the whole restore.
+     *
      * Runs on [Dispatchers.IO] so JSON parsing and SharedPreferences writes
      * never block the main thread.
      * @return a human-readable summary like "Restored 24 settings."
@@ -90,39 +137,69 @@ object BackupHelper {
         val root = JSONObject(json)
 
         // Reject completely foreign files
-        if (root.has("gama_backup_version").not() || root.optInt("gama_backup_version", 0) < 1) {
+        if (!root.has("gama_backup_version") || root.optInt("gama_backup_version", 0) < 1) {
             throw IllegalArgumentException("This doesn't look like a GAMA backup file.")
         }
 
         var count = 0
         val editor = prefs.edit()
+        var skipped = 0
 
         INT_KEYS.forEach { key ->
-            if (root.has(key)) { editor.putInt(key, root.getInt(key)); count++ }
+            if (root.has(key)) {
+                val value = root.optInt(key, Int.MIN_VALUE)
+                if (value != Int.MIN_VALUE) { editor.putInt(key, value); count++ } else skipped++
+            }
         }
         BOOLEAN_KEYS.forEach { key ->
-            if (root.has(key)) { editor.putBoolean(key, root.getBoolean(key)); count++ }
+            if (root.has(key)) {
+                val raw = root.opt(key)
+                // Accept real booleans or exact "true"/"false" strings only.
+                // org.json's optBoolean silently maps anything else (e.g. 1,
+                // "yes") to false — writing that would corrupt the setting
+                // while counting it as restored, so skip instead.
+                val coercible = raw is Boolean ||
+                    (raw is String && (raw.equals("true", true) || raw.equals("false", true)))
+                if (coercible) {
+                    editor.putBoolean(key, root.optBoolean(key, false)); count++
+                } else skipped++
+            }
         }
         FLOAT_KEYS.forEach { key ->
-            if (root.has(key)) { editor.putFloat(key, root.getDouble(key).toFloat()); count++ }
+            if (root.has(key)) {
+                val value = root.optDouble(key, Double.NaN)
+                if (!value.isNaN()) { editor.putFloat(key, value.toFloat()); count++ } else skipped++
+            }
         }
         LONG_KEYS.forEach { key ->
-            if (root.has(key)) { editor.putLong(key, root.getLong(key)); count++ }
+            if (root.has(key)) {
+                val value = root.optLong(key, Long.MIN_VALUE)
+                if (value != Long.MIN_VALUE) { editor.putLong(key, value); count++ } else skipped++
+            }
         }
         STRING_KEYS.forEach { key ->
-            if (root.has(key)) { editor.putString(key, root.getString(key)); count++ }
+            if (root.has(key)) {
+                val value = root.optString(key, "\u0000")
+                if (value != "\u0000") { editor.putString(key, value); count++ } else skipped++
+            }
         }
         STRING_SET_KEYS.forEach { key ->
             if (root.has(key)) {
-                val arr = root.getJSONArray(key)
-                val set = mutableSetOf<String>()
-                for (i in 0 until arr.length()) set.add(arr.getString(i))
-                editor.putStringSet(key, set)
-                count++
+                val arrOpt = root.optJSONArray(key)
+                if (arrOpt != null) {
+                    val set = mutableSetOf<String>()
+                    for (i in 0 until arrOpt.length()) {
+                        val item = arrOpt.optString(i, null as String?) ?: continue
+                        set.add(item)
+                    }
+                    editor.putStringSet(key, set)
+                    count++
+                } else skipped++
             }
         }
 
         editor.apply()
-        "Restored $count settings successfully."
+        if (skipped > 0) "Restored $count settings ($skipped invalid entries skipped)."
+        else "Restored $count settings successfully."
     }
 }

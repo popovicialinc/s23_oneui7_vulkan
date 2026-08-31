@@ -139,7 +139,7 @@ internal fun AnimatedSearchPanelTitle(
     visible: Boolean,
     fontSize: androidx.compose.ui.unit.TextUnit,
     colors: ThemeColors,
-    scrollOffset: Int,
+    scrollState: androidx.compose.foundation.ScrollState?,
     modifier: Modifier = Modifier
 ) {
     // Key the title by its logical panel, not by the shared Search/Global
@@ -192,11 +192,16 @@ internal fun AnimatedSearchPanelTitle(
 
         Box(
             modifier = modifier.graphicsLayer {
-                val p = progress.value.coerceIn(0f, 1f)
+                // Keep the spring's raw value for scale so the title retains
+                // the same subtle overshoot/bounce as standard AnimatedElement.
+                // Only alpha is clamped because it cannot render meaningfully
+                // outside the [0, 1] range.
+                val rawProgress = progress.value
+                val p = rawProgress.coerceIn(0f, 1f)
                 alpha = p
-                scaleX = 0.94f + p * 0.06f
+                scaleX = 0.94f + rawProgress * 0.06f
                 scaleY = scaleX
-                translationY = (1f - p) * offsetYPx
+                translationY = (1f - rawProgress) * offsetYPx
                 clip = false
             }
         ) {
@@ -204,7 +209,7 @@ internal fun AnimatedSearchPanelTitle(
                 text = text,
                 fontSize = fontSize,
                 colors = colors,
-                scrollOffset = scrollOffset
+                scrollState = scrollState
             )
         }
     }
@@ -2234,7 +2239,7 @@ fun SettingsSearchPanel(
                         visible = visible,
                         fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
                         colors = colors,
-                        scrollOffset = resultsScrollState.value
+                        scrollState = resultsScrollState
                     )
 
                     AnimatedElement(
@@ -2326,7 +2331,7 @@ fun SettingsSearchPanel(
                             visible = visible,
                             fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
                             colors = colors,
-                            scrollOffset = resultsScrollState.value
+                            scrollState = resultsScrollState
                         )
 
                         PanelCaption(

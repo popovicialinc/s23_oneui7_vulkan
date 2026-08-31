@@ -458,7 +458,7 @@ fun CleanTitle(
     fontSize: androidx.compose.ui.unit.TextUnit,
     colors: ThemeColors,
     reverseGradient: Boolean = false,
-    scrollOffset: Int = 0
+    scrollState: androidx.compose.foundation.ScrollState? = null
 ) {
     val titleColor = colors.textPrimary
     val animationLevel = LocalAnimationLevel.current
@@ -499,29 +499,15 @@ fun CleanTitle(
         }
     }
 
-    val darkTitleGlowMode = colors.background.luminance() < 0.2f
-
-    // Cache the Paint outside drawWithContent — stronger white glow in dark/oled,
-    // completely disabled in light mode so titles stay clean there.
-    val titleGlowPaint = remember(darkTitleGlowMode, fontSize) {
-        Paint().asFrameworkPaint().apply {
-            color = android.graphics.Color.TRANSPARENT
-            if (darkTitleGlowMode) {
-                setShadowLayer(108f, 0f, 0f, Color.White.copy(alpha = 0.90f).toArgb())
-            } else {
-                clearShadowLayer()
-            }
-            textAlign = android.graphics.Paint.Align.CENTER
-            isDither = true
-        }
-    }
-
     // FIXED GRADIENT BARS — always use horizontal gradient regardless of orientation.
+    // scrollState.value is read INSIDE the graphicsLayer lambda (deferred read):
+    // scrolling only re-draws the title layer instead of recomposing the whole
+    // panel that hosts it.
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
-                translationY = -scrollOffset * 0.4f
+                translationY = -(scrollState?.value ?: 0) * 0.4f
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
@@ -572,27 +558,12 @@ fun CleanTitle(
                 textAlign = TextAlign.Start,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(horizontal = 24.dp)
-                    .drawWithContent {
-                        if (darkTitleGlowMode) {
-                            drawIntoCanvas { canvas ->
-                                titleGlowPaint.textSize = fontSize.toPx()
-                                canvas.nativeCanvas.drawText(
-                                    text,
-                                    size.width / 2,
-                                    size.height / 2 + (fontSize.toPx() * 0.25f),
-                                    titleGlowPaint
-                                )
-                            }
-                        }
-                        drawContent()
-                    }
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             )
         } else {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 24.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 lines.forEach { line ->
                     Text(
@@ -604,20 +575,7 @@ fun CleanTitle(
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.drawWithContent {
-                            if (darkTitleGlowMode) {
-                                drawIntoCanvas { canvas ->
-                                    titleGlowPaint.textSize = fontSize.toPx()
-                                    canvas.nativeCanvas.drawText(
-                                        line,
-                                        size.width / 2,
-                                        size.height / 2 + (fontSize.toPx() * 0.25f),
-                                        titleGlowPaint
-                                    )
-                                }
-                            }
-                            drawContent()
-                        }
+                        modifier = Modifier
                     )
                 }
             }

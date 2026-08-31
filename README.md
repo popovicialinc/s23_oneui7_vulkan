@@ -17,12 +17,12 @@ While optimized for the Samsung Galaxy S23 lineup, this project is compatible wi
 
 * ❄️ **Lower-running temps**
 * 🔋 **An improved battery life**
-* 🔓 **Zero risk** - Root is optional; 100% Knox-safe!
+* 🔓 **No root required** - Uses Shizuku or root; it does not modify the Knox warranty state, but renderer compatibility varies by device.
 * 🛠️ **User-friendliness** - Simple yet beautiful UI to switch APIs without complex terminal commands
 
 **Resources**
 * 📱 [**Does Vulkan work on my device?**](https://docs.google.com/spreadsheets/d/1X_UuSJBWc9O2Q9nW0x-V_WC0uY-yKDfNRkxgko8i6AA/edit?usp=sharing)
-    * Vulkan support can vary between Android devices and One UI versions, so performance may differ, especially on versions below One UI 7 (Android 15). You’re always welcome to give it a try though! If something doesn’t work as expected, a quick reboot will bring everything back to normal.
+    * Vulkan support can vary between Android devices and One UI versions, so performance may differ, especially on versions below One UI 7 (Android 15). You’re always welcome to give it a try though! If something doesn’t work as expected, switch back to OpenGL in GAMA; a reboot may also restore your saved Vulkan choice when Shizuku or root is available.
     * If your device is not listed, please kindly follow [this link](https://forms.gle/qYUHHhaQNLiY9i1MA) where you will be able to fill out a form - The relevant, collected data will be added to the [spreadsheet](https://docs.google.com/spreadsheets/d/1X_UuSJBWc9O2Q9nW0x-V_WC0uY-yKDfNRkxgko8i6AA/edit?usp=sharing)
     * All data is user-reported.
 * ☕ If you want to support the development of GAMA, [**consider donating**](https://buymeacoffee.com/popovicialinc)!
@@ -69,13 +69,13 @@ While optimized for the Samsung Galaxy S23 lineup, this project is compatible wi
   * **Vulkan** - Lower temps, Better battery
   * **OpenGL** - Fallback option
 
-**Heads up: You’ll need to run this script after every phone reboot.**
+**Heads up: GAMA can re-apply your saved Vulkan choice after a reboot when Shizuku or root is available.** On some devices, especially with aggressive battery management, you may need to open GAMA and switch manually if the boot restore worker is stopped.
 
-**Note**: Vulkan might not run perfectly on every Android device due to the wide variety of hardware and Android skins, but it’s worth giving it a try! If your phone freezes or shows a black screen, just hold VOLUME DOWN + POWER to force a restart. GAMA forces Vulkan rendering using the setprop command (shell setprop debug.hwui.renderer). This change is temporary; Vulkan will only stay active until your next reboot. Simply restarting your device will revert any changes made by GAMA!
+**Note**: Vulkan might not run perfectly on every Android device due to the wide variety of hardware and Android skins, but it’s worth giving it a try! If your phone freezes or shows a black screen, just hold VOLUME DOWN + POWER to force a restart. GAMA forces Vulkan rendering using the `setprop debug.hwui.renderer` command. The setting is cleared by Android on reboot, after which GAMA attempts to restore the saved renderer when its boot worker can access Shizuku or root; a manual switch may still be needed if the device blocks background work.
 
 ### Automation via Tasker
 
-* GAMA supports automation via Tasker. See the [setup guide](https://github.com/popovicialinc/gama/blob/main/GAMA%20for%20Android/GAMA_Tasker_Guide.pdf) to get started.
+Open **Library → Tasker → Set up** in GAMA, copy the generated token, then follow the [step-by-step Tasker guide](!assets/GAMA_Tasker_Guide.pdf). The token protects GAMA's exported automation receiver, so keep it private and add it as the required `token:<copied token>` extra in every Tasker task.
 
 ## **Photos**
 <p align="center">

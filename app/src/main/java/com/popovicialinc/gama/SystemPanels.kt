@@ -66,6 +66,7 @@ import kotlin.math.roundToInt
 fun SystemPanel(
     visible: Boolean,
     onDismiss: () -> Unit,
+    onHapticsClick: () -> Unit,
     verboseMode: Boolean,
     onVerboseModeChange: (Boolean) -> Unit,
     dismissOnClickOutside: Boolean,
@@ -97,7 +98,18 @@ fun SystemPanel(
             colors = colors
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 7) {
+        // Haptics belongs to the system/input feedback section and returns to
+        // this panel when dismissed.
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 8) {
+            SettingsNavigationCard(
+                title = strings["settings.haptics"].ifEmpty { "HAPTICS" },
+                description = strings["settings.haptics_desc"].ifEmpty { "Vibration feedback patterns and strengths" },
+                onClick = { performHaptic(); onHapticsClick() },
+                isSmallScreen = isSmallScreen, colors = colors,
+                cardBackground = cardBackground, oledMode = oledMode
+            )
+        }
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 8) {
             SettingsNavigationCard(
                 title = strings["system.notifications"].ifEmpty { "NOTIFICATIONS" },
                 description = strings["system.notifications_desc"].ifEmpty { "Reminder alerts if you've left OpenGL running longer than intended" },
@@ -106,7 +118,7 @@ fun SystemPanel(
                 cardBackground = cardBackground, oledMode = oledMode
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 7) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 8) {
             SettingsNavigationCard(
                 title = strings["system.backup"].ifEmpty { "BACKUP & RESTORE" },
                 description = strings["system.backup_desc"].ifEmpty { "Export all settings to a file, or restore from a previous backup" },
@@ -115,7 +127,7 @@ fun SystemPanel(
                 cardBackground = cardBackground, oledMode = oledMode
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 7) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 8) {
             SettingsNavigationCard(
                 title = strings["settings.language"].ifEmpty { "LANGUAGE" },
                 description = strings["settings.language_desc"].ifEmpty { "Change the display language used throughout the app" },
@@ -124,7 +136,7 @@ fun SystemPanel(
                 cardBackground = cardBackground, oledMode = oledMode
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 7) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 8) {
             SettingsNavigationCard(
                 title = strings["system.crash_log"].ifEmpty { "LOGS" },
                 description = strings["system.crash_log_desc"].ifEmpty { "View recent reports and copy details for troubleshooting" },
@@ -133,7 +145,7 @@ fun SystemPanel(
                 cardBackground = cardBackground, oledMode = oledMode
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 7) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 6, totalItems = 8) {
             ToggleCard(
                 title = LocalStrings.current["renderer.verbose_mode"].ifEmpty { "VERBOSE OUTPUT" },
                 description = LocalStrings.current["renderer.verbose_mode_desc"].ifEmpty { "Shows the full shell command output when switching renderers" },
@@ -144,7 +156,7 @@ fun SystemPanel(
                 accentBorder = true
             )
         }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 6, totalItems = 7) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 7, totalItems = 8) {
             ToggleCard(
                 title = LocalStrings.current["renderer.tap_outside_to_close"].ifEmpty { "TAP OUTSIDE TO CLOSE" },
                 description = LocalStrings.current["renderer.tap_outside_to_close_desc"].ifEmpty { "Tap anywhere outside an open panel to dismiss it — turn off to require the back button instead" },
@@ -227,7 +239,7 @@ fun NotificationsPanel(
         isLandscape = isLandscape, isSmallScreen = isSmallScreen,
         oledMode = oledMode, colors = colors
     ) { _ ->
-        CleanTitle(text = LocalStrings.current["notifications.title"].ifEmpty { "NOTIFICATIONS" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
+        CleanTitle(text = LocalStrings.current["notifications.title"].ifEmpty { "ALERTS" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
 
         PanelCaption(
             text = LocalStrings.current["notifications.subtitle"].ifEmpty { "GAMA can ping you if you've left OpenGL running and haven't switched back to Vulkan" },
@@ -239,16 +251,29 @@ fun NotificationsPanel(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(1.dp, colors.errorColor.copy(alpha = 0.4f), RoundedCornerShape(36.dp)),
-                    colors = CardDefaults.cardColors(containerColor = colors.errorColor.copy(alpha = 0.08f)),
-                    shape = RoundedCornerShape(36.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        .border(1.25.dp, colors.errorColor.copy(alpha = 0.62f), RoundedCornerShape(28.dp)),
+                    // This must remain opaque: a translucent warning card becomes
+                    // unreadable over the animated background.
+                    colors = CardDefaults.cardColors(containerColor = cardBackground),
+                    shape = RoundedCornerShape(28.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = LocalStrings.current["notifications.permission_required"].ifEmpty { "PERMISSION REQUIRED" }, fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
-                            letterSpacing = 2.sp, fontFamily = quicksandFontFamily, color = colors.errorColor
-                        )
+                    Column(modifier = Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(colors.errorColor.copy(alpha = 0.16f), CircleShape)
+                                    .border(1.dp, colors.errorColor.copy(alpha = 0.58f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("!", color = colors.errorColor, fontWeight = FontWeight.ExtraBold, fontSize = ts.headlineSmall)
+                            }
+                            Text(
+                                text = LocalStrings.current["notifications.permission_required"].ifEmpty { "ACCESS NEEDED" }, fontSize = ts.labelLarge, fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp, fontFamily = quicksandFontFamily, color = colors.errorColor
+                            )
+                        }
                         Text(
                             text = LocalStrings.current["notifications.permission_required_desc"].ifEmpty { "GAMA needs permission to send you notifications — tap below to grant it." },
                             fontSize = ts.bodyMedium, color = colors.textSecondary,
@@ -345,12 +370,46 @@ fun NotificationsPanel(
                 animationSpec = tween(durationMillis = 300, easing = MotionTokens.Easing.velvet),
                 label = "test_btn_alpha"
             )
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(scaleX = testBtnScale, scaleY = testBtnScale, alpha = testBtnAlpha)) {
-                FlatButton(
-                    text = LocalStrings.current["notifications.send_test"].ifEmpty { "Send Test Notification" }, onClick = onTestNotification,
-                    modifier = Modifier.fillMaxWidth(), accent = false, enabled = testBtnEnabled,
-                    colors = colors, maxLines = 1, oledMode = oledMode
-                )
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer(scaleX = testBtnScale, scaleY = testBtnScale, alpha = testBtnAlpha)
+                    .border(1.dp, colors.primaryAccent.copy(alpha = 0.32f), RoundedCornerShape(28.dp)),
+                colors = CardDefaults.cardColors(containerColor = cardBackground),
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "TEST ALERT",
+                        fontSize = ts.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        fontFamily = quicksandFontFamily,
+                        color = colors.primaryAccent.copy(alpha = 0.78f)
+                    )
+                    Text(
+                        text = "Send a sample alert to check that delivery is working.",
+                        fontSize = ts.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = quicksandFontFamily,
+                        color = colors.textSecondary
+                    )
+                    FlatButton(
+                        text = LocalStrings.current["notifications.send_test"].ifEmpty { "SEND TEST ALERT" },
+                        onClick = onTestNotification,
+                        modifier = Modifier.fillMaxWidth(),
+                        accent = true,
+                        enabled = testBtnEnabled,
+                        colors = colors,
+                        maxLines = 1,
+                        oledMode = oledMode,
+                        cornerRadius = 16.dp
+                    )
+                }
             }
         }
     }

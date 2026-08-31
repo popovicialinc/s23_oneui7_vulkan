@@ -208,10 +208,6 @@ internal fun PanelScaffold(
                             .padding(
                                 top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
                                 bottom = if (reserveBackButtonSpace) bottomPaddingDp.dp else 0.dp
-                            )
-                            .then(
-                                if (visible) Modifier.pointerInput(Unit) { detectTapGestures { } }
-                                else Modifier
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 16.dp else 20.dp)

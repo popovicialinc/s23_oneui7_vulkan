@@ -1,6 +1,49 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// ── Release signing credentials ──────────────────────────────────────────────
+// Credentials are NEVER stored in this file (it is committed to git).
+// Resolution order:
+//   1. keystore.properties at the repo root (gitignored):
+//        storeFile=<absolute or project-relative path>
+//        storePassword=...
+//        keyAlias=...
+//        keyPassword=...
+//   2. Environment variables: GAMA_STORE_FILE, GAMA_STORE_PASSWORD,
+//      GAMA_KEY_ALIAS, GAMA_KEY_PASSWORD
+//   3. Neither present → debug and verification tasks still work; release
+//      artifacts fail fast until signing credentials are configured.
+val keystoreProps = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingProp(name: String, envVar: String): String? {
+    val fromFile = keystoreProps.getProperty(name)
+    if (!fromFile.isNullOrBlank()) return fromFile
+    val fromEnv = System.getenv(envVar)
+    return if (fromEnv.isNullOrBlank()) null else fromEnv
+}
+
+val hasSigningCredentials = signingProp("storeFile", "GAMA_STORE_FILE") != null &&
+    signingProp("storePassword", "GAMA_STORE_PASSWORD") != null &&
+    signingProp("keyAlias", "GAMA_KEY_ALIAS") != null &&
+    signingProp("keyPassword", "GAMA_KEY_PASSWORD") != null
+
+val requestedReleaseArtifact = gradle.startParameter.taskNames.any { task ->
+    task.substringAfterLast(':').contains("Release", ignoreCase = true) &&
+        (task.contains("assemble", ignoreCase = true) || task.contains("bundle", ignoreCase = true))
+}
+
+if (requestedReleaseArtifact && !hasSigningCredentials) {
+    throw GradleException(
+        "GAMA: refusing to build a release artifact without signing credentials. " +
+            "Configure keystore.properties or GAMA_STORE_FILE/GAMA_STORE_PASSWORD/" +
+            "GAMA_KEY_ALIAS/GAMA_KEY_PASSWORD."
+    )
 }
 
 android {
@@ -13,11 +56,13 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            storeFile = file("C:\\Users\\popov\\Documents\\gama_key")
-            storePassword = "alinalin11"
-            keyAlias = "gama-key"
-            keyPassword = "alinalin11"
+        if (hasSigningCredentials) {
+            create("release") {
+                storeFile = file(signingProp("storeFile", "GAMA_STORE_FILE")!!)
+                storePassword = signingProp("storePassword", "GAMA_STORE_PASSWORD")
+                keyAlias = signingProp("keyAlias", "GAMA_KEY_ALIAS")
+                keyPassword = signingProp("keyPassword", "GAMA_KEY_PASSWORD")
+            }
         }
     }
 
@@ -26,7 +71,7 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = 13
-        versionName = "1.5"
+        versionName = "1.4"
 
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -34,7 +79,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasSigningCredentials) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             isMinifyEnabled = true
             isShrinkResources = true
@@ -120,4 +167,10 @@ dependencies {
     // Debug only
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Unit tests (JVM)
+    testImplementation(libs.junit)
+    // Real org.json implementation — android.jar only ships method stubs that
+    // throw "not mocked" when BackupHelper's JSON code runs under JUnit.
+    testImplementation("org.json:json:20240303")
 }

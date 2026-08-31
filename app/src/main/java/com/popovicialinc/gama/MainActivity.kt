@@ -96,7 +96,9 @@ class MainActivity : ComponentActivity() {
             enableEdgeToEdge()
             WindowCompat.setDecorFitsSystemWindows(window, false)
             WindowCompat.getInsetsController(window, window.decorView).apply {
-                hide(WindowInsetsCompat.Type.statusBars())
+                // GAMA draws a full-screen experience; hide both bars so the
+                // bottom action controls cannot sit underneath navigation UI.
+                hide(WindowInsetsCompat.Type.systemBars())
                 systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
         } catch (_: Exception) {}
@@ -130,7 +132,17 @@ class MainActivity : ComponentActivity() {
                     @Suppress("DEPRECATION")
                     windowManager.defaultDisplay?.supportedModes
                 }
-            val bestMode = supportedModes?.maxByOrNull { it.refreshRate }
+            // Prefer the fastest mode at the current resolution. Some devices
+            // expose their highest refresh rate only at a lower resolution;
+            // selecting that mode would unexpectedly change display scaling.
+            @Suppress("DEPRECATION")
+            val currentDisplay = windowManager.defaultDisplay
+            val currentMode = supportedModes?.firstOrNull { it.modeId == currentDisplay?.mode?.modeId }
+            val sameResolutionModes = currentMode?.let { mode ->
+                supportedModes.filter { it.physicalWidth == mode.physicalWidth && it.physicalHeight == mode.physicalHeight }
+            }.orEmpty()
+            val bestMode = (sameResolutionModes.ifEmpty { supportedModes?.toList().orEmpty() })
+                .maxByOrNull { it.refreshRate }
             if (bestMode != null) {
                 val attrs = window.attributes
                 // API 23+: soft Hz hint

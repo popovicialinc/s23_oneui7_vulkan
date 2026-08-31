@@ -50,7 +50,7 @@ class BootReceiver : BroadcastReceiver() {
 
         // Only bother if the saved renderer is Vulkan — OpenGL is the Android
         // default after a reboot anyway, so there's nothing to re-apply.
-        val savedRenderer = prefs.getString("last_renderer", "OpenGL") ?: "OpenGL"
+        val savedRenderer = RendererState.getDesiredRenderer(prefs)
         if (savedRenderer == "OpenGL") return
 
         val workRequest = OneTimeWorkRequestBuilder<BootRendererWorker>()

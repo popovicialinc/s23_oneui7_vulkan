@@ -70,7 +70,6 @@ fun SettingsPanel(
     onAppearanceClick: () -> Unit,
     onRendererClick: () -> Unit,
     onSystemClick: () -> Unit,
-    onHapticsClick: () -> Unit,
     isSmallScreen: Boolean,
     isLandscape: Boolean,
     isTablet: Boolean,
@@ -97,15 +96,15 @@ fun SettingsPanel(
             )
         }
     ) { scrollState ->
-        AnimatedElement(visible = visible, staggerIndex = 0, totalItems = 5) {
+        AnimatedElement(visible = visible, staggerIndex = 0, totalItems = 6) {
             CleanTitle(
                 text = strings["settings.title"].ifEmpty { "SETTINGS" },
                 fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
-                colors = colors, scrollOffset = scrollState.value
+                colors = colors, scrollState = scrollState
             )
         }
 
-        AnimatedElement(visible = visible, staggerIndex = 1, totalItems = 5) {
+        AnimatedElement(visible = visible, staggerIndex = 1, totalItems = 6) {
             PanelCaption(
                 text = strings["settings.caption"]
                     .ifEmpty { strings["text_catalog.core_app_sections_use_search_to_jump_directly_to_toggles_sli"] }
@@ -114,7 +113,7 @@ fun SettingsPanel(
             )
         }
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 6) {
             SettingsNavigationCard(
                 title = strings["settings.appearance"].ifEmpty { "VISUALS" },
                 description = strings["settings.appearance_desc"].ifEmpty { "Colors, theme, effects, animations, and interface scale" },
@@ -124,7 +123,7 @@ fun SettingsPanel(
             )
         }
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 5) {
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 6) {
             SettingsNavigationCard(
                 title = strings["settings.renderer"].ifEmpty { "RENDERER" },
                 description = strings["settings.renderer_desc"].ifEmpty { "Switching engine, aggressive mode, launcher and keyboard behavior" },
@@ -133,7 +132,6 @@ fun SettingsPanel(
                 cardBackground = cardBackground, oledMode = oledMode
             )
         }
-
 
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
             SettingsNavigationCard(

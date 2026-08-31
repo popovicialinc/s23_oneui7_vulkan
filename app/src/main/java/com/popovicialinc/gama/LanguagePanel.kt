@@ -123,8 +123,7 @@ fun LanguagePanel(
         CleanTitle(
             text         = strings["language_panel.title"].ifEmpty { "LANGUAGE" },
             fontSize     = if (isLandscape) ts.displayMedium else ts.displayLarge,
-            colors       = colors,
-            scrollOffset = 0
+            colors       = colors
         )
 
         // ── Search bar ─────────────────────────────────────────────────────

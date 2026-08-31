@@ -132,6 +132,12 @@ fun GlideOptionSelector(
     val animLevel = LocalAnimationLevel.current
     val animSpeed = LocalAnimationSpeed.current
     val viewConfiguration = LocalViewConfiguration.current
+    val selectorCornerRadius = 28.dp
+    val indicatorInset = 4.dp
+    // An inset rounded shape must reduce its radius by the same inset to keep
+    // the arcs concentric. Keeping both at 28.dp made the selected pill bulge
+    // toward the selector/card edge at the corners.
+    val indicatorCornerRadius = selectorCornerRadius - indicatorInset
 
     val currentOnOptionSelected by rememberUpdatedState(onOptionSelected)
     val currentSelectedIndex by rememberUpdatedState(selectedIndex)
@@ -158,7 +164,7 @@ fun GlideOptionSelector(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(selectorCornerRadius))
             .background(colors.primaryAccent.copy(alpha = if (enabled) 0.07f else 0.06f))
     ) {
         val maxWidth = maxWidth
@@ -193,8 +199,8 @@ fun GlideOptionSelector(
                 .offset(x = indicatorOffset)
                 .width(itemWidth)
                 .fillMaxHeight()
-                .padding(4.dp)
-                .clip(RoundedCornerShape(28.dp))
+                .padding(indicatorInset)
+                .clip(RoundedCornerShape(indicatorCornerRadius))
                 .background(colors.primaryAccent.copy(alpha = contentAlpha))
         )
 
