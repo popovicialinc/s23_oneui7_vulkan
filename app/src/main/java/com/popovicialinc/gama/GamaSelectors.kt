@@ -125,7 +125,8 @@ fun GlideOptionSelector(
     onOptionSelected: (Int) -> Unit,
     colors: ThemeColors,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true // Add enabled parameter
+    enabled: Boolean = true,
+    rescaleWhenDisabled: Boolean = false
 ) {
     val density = LocalDensity.current
     val ts = LocalTypeScale.current
@@ -143,7 +144,7 @@ fun GlideOptionSelector(
     val currentSelectedIndex by rememberUpdatedState(selectedIndex)
 
     val scale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.85f,
+        targetValue = if (enabled || !rescaleWhenDisabled) 1f else 0.80f,
         animationSpec = if (animLevel == 2) snap() else if (animLevel == 1) tween(MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasized) else spring(
             dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
             stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, animSpeed)
@@ -152,7 +153,7 @@ fun GlideOptionSelector(
     )
 
     val contentAlpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.42f,
+        targetValue = if (enabled || !rescaleWhenDisabled) 1f else 0.50f,
         animationSpec = tween(durationMillis = MotionTokens.SpeedUtil.durationMs(340, animSpeed), easing = MotionTokens.Easing.velvet),
         label = "glide_selector_alpha"
     )
@@ -309,6 +310,7 @@ fun CompactColorPickerCard(
     modifier: Modifier = Modifier
 ) {
     val ts = LocalTypeScale.current
+    val landscapeGrid = LocalLandscapePanelGrid.current
     val animLevel = LocalAnimationLevel.current
     val animSpeed = LocalAnimationSpeed.current
 
@@ -338,19 +340,19 @@ fun CompactColorPickerCard(
 
     val cardShape = RoundedCornerShape(28.dp)
     val cardScale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.92f,
+        targetValue = if (enabled) 1f else 0.90f,
         animationSpec = if (animLevel == 2) snap() else tween(MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasized),
         label = "accent_card_scale"
     )
     val cardAlpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.38f,
+        targetValue = 1f,
         animationSpec = tween(MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasized),
         label = "accent_card_alpha"
     )
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxWidth(if (landscapeGrid) 0.48f else 1f)
             .graphicsLayer(scaleX = cardScale, scaleY = cardScale, alpha = cardAlpha)
             .clip(cardShape)
             .background(cardBackground)
@@ -484,6 +486,14 @@ fun CompactColorPickerCard(
                     }
                 }
             }
+        }
+        if (!enabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(cardShape)
+                    .background((if (isDarkTheme) Color.Black else Color.White).copy(alpha = 0.50f))
+            )
         }
     }
 }

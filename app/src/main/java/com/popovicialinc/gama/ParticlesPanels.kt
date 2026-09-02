@@ -110,7 +110,7 @@ fun ParticlesPanel(
         // ── Style selector — Stars vs Matrix Rain ─────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4, enabled = particlesEnabled) {
             val styleCardScale by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.85f,
+                targetValue = if (particlesEnabled) 1f else 0.90f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                     stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, LocalAnimationSpeed.current)
@@ -118,7 +118,7 @@ fun ParticlesPanel(
                 label = "style_card_scale"
             )
             val styleCardAlpha by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.25f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 300, easing = MotionTokens.Easing.velvet),
                 label = "style_card_alpha"
             )
@@ -180,40 +180,36 @@ fun ParticlesPanel(
                         )
                     }
                 }
+                DisabledCardWash(particlesEnabled, oledMode)
             }
         }
 
-        // ── PARTICLES SETTINGS nav card ───────────────────────────────────────
-        // Active when style = Particles; disabled (scaled down + dimmed) when Matrix
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = particlesEnabled && !matrixMode) {
-            val particlesSettingsEnabled = particlesEnabled && !matrixMode
-            SettingsNavigationCard(
-                title       = LocalStrings.current["particles.particles_settings_title"].ifEmpty { "PARTICLE SETTINGS" },
-                description = LocalStrings.current["particles.particles_settings_desc"].ifEmpty {
-                    "Shape, star mode, time mode, speed, parallax, and count"
-                },
-                onClick       = { if (particlesSettingsEnabled) { performHaptic(); onParticlesSettingsClick() } },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode,
-                enabled       = particlesSettingsEnabled
-            )
-        }
-
-        // ── MATRIX SETTINGS nav card ──────────────────────────────────────────
-        // Active when style = Matrix; disabled (scaled down + dimmed) when Particles
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4, enabled = particlesEnabled && matrixMode) {
-            val matrixSettingsEnabled = particlesEnabled && matrixMode
-            SettingsNavigationCard(
-                title       = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX SETTINGS" },
-                description = LocalStrings.current["particles.matrix_settings_desc"].ifEmpty {
-                    "Glyph colors, fall speed, column density, font size, and trail length"
-                },
-                onClick       = { if (matrixSettingsEnabled) { performHaptic(); onMatrixSettingsClick() } },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode,
-                enabled       = matrixSettingsEnabled
-            )
-        }
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                // Active when style = Particles; disabled when Matrix is active.
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = particlesEnabled && !matrixMode) {
+                    val particlesSettingsEnabled = particlesEnabled && !matrixMode
+                    SettingsNavigationCard(
+                        title = LocalStrings.current["particles.particles_settings_card_title"].ifEmpty { "PARTICLE SETTINGS" },
+                        description = LocalStrings.current["particles.particles_settings_desc"].ifEmpty { "Shape, star mode, time mode, speed, parallax, and count" },
+                        onClick = { if (particlesSettingsEnabled) { performHaptic(); onParticlesSettingsClick() } },
+                        isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesSettingsEnabled
+                    )
+                }
+            },
+            {
+                // Active when style = Matrix; disabled when Particles is active.
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4, enabled = particlesEnabled && matrixMode) {
+                    val matrixSettingsEnabled = particlesEnabled && matrixMode
+                    SettingsNavigationCard(
+                        title = LocalStrings.current["particles.matrix_settings_card_title"].ifEmpty { "MATRIX SETTINGS" },
+                        description = LocalStrings.current["particles.matrix_settings_desc"].ifEmpty { "Glyph colors, fall speed, column density, font size, and trail length" },
+                        onClick = { if (matrixSettingsEnabled) { performHaptic(); onMatrixSettingsClick() } },
+                        isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = matrixSettingsEnabled
+                    )
+                }
+            }
+        ))
     }
 }
 
@@ -245,53 +241,49 @@ fun ParticlesSettingsPanel(
         )
 
         val navAlpha by animateFloatAsState(
-            targetValue   = if (particlesEnabled) 1f else 0.38f,
+            targetValue   = 1f,
             animationSpec = tween(durationMillis = 260, easing = MotionTokens.Easing.velvet),
             label         = "ps_nav_alpha"
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = particlesEnabled) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
-                SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.shape_look"].ifEmpty { "SHAPE & LOOK" },
-                    description = LocalStrings.current["particles.appearance_desc"].ifEmpty {
-                        "Star mode, time-of-day sky, and visual style"
-                    },
-                    onClick       = { if (particlesEnabled) { performHaptic(); onAppearanceClick() } },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode,
-                    enabled       = particlesEnabled
-                )
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = particlesEnabled) {
+                    Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["particles.shape_look_card_title"].ifEmpty { "SHAPE & LOOK" },
+                            description = LocalStrings.current["particles.appearance_desc"].ifEmpty { "Star mode, time-of-day sky, and visual style" },
+                            onClick = { if (particlesEnabled) { performHaptic(); onAppearanceClick() } },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesEnabled
+                        )
+                    }
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4, enabled = particlesEnabled) {
+                    Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
+                            description = LocalStrings.current["particles.motion_desc"].ifEmpty { "Float speed, parallax tilt, and sensitivity" },
+                            onClick = { if (particlesEnabled) { performHaptic(); onMotionClick() } },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesEnabled
+                        )
+                    }
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = particlesEnabled) {
+                    Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["particles.performance_title"].ifEmpty { "PERFORMANCE" },
+                            description = LocalStrings.current["particles.performance_desc"].ifEmpty { "Particle count and render refresh rate" },
+                            onClick = { if (particlesEnabled) { performHaptic(); onPerformanceClick() } },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesEnabled
+                        )
+                    }
+                }
             }
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4, enabled = particlesEnabled) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
-                SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
-                    description = LocalStrings.current["particles.motion_desc"].ifEmpty {
-                        "Float speed, parallax tilt, and sensitivity"
-                    },
-                    onClick       = { if (particlesEnabled) { performHaptic(); onMotionClick() } },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode,
-                    enabled       = particlesEnabled
-                )
-            }
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = particlesEnabled) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
-                SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.performance_title"].ifEmpty { "PERFORMANCE" },
-                    description = LocalStrings.current["particles.performance_desc"].ifEmpty {
-                        "Particle count and render refresh rate"
-                    },
-                    onClick       = { if (particlesEnabled) { performHaptic(); onPerformanceClick() } },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode,
-                    enabled       = particlesEnabled
-                )
-            }
-        }
+        ))
     }
 }
 
@@ -317,30 +309,30 @@ fun ParticlesAppearancePanel(
         isLandscape = isLandscape, isSmallScreen = isSmallScreen,
         oledMode = oledMode, colors = colors
     ) { _ ->
-        CleanTitle(text = LocalStrings.current["particles.shape_look"].ifEmpty { "SHAPE &\nLOOK" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
+        CleanTitle(text = LocalStrings.current["particles.shape_look_title"].ifEmpty { "SHAPE &\nLOOK" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
-            ToggleCard(
-                title = LocalStrings.current["particles.time_mode"].ifEmpty { "TIME MODE" },
-                description = LocalStrings.current["particles.time_mode_desc"].ifEmpty { "A sun and moon travel across the sky in sync with the real time of day" },
-                checked = particleTimeMode,
-                onCheckedChange = { performHaptic(); onParticleTimeModeChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                enabled = particlesEnabled
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2, enabled = particlesEnabled) {
-            ToggleCard(
-                title = LocalStrings.current["particles.star_mode"].ifEmpty { "STAR MODE" },
-                description = LocalStrings.current["particles.star_mode_desc"].ifEmpty { "Replaces floating dots with tiny twinkling stars — pairs well with Time Mode at night" },
-                checked = particleStarMode,
-                onCheckedChange = { performHaptic(); onParticleStarModeChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                enabled = particlesEnabled && !particleTimeMode
-            )
-        }
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
+                    ToggleCard(
+                        title = LocalStrings.current["particles.time_mode"].ifEmpty { "TIME MODE" },
+                        description = LocalStrings.current["particles.time_mode_desc"].ifEmpty { "A sun and moon travel across the sky in sync with the real time of day" },
+                        checked = particleTimeMode, onCheckedChange = { performHaptic(); onParticleTimeModeChange(it) },
+                        colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode, enabled = particlesEnabled
+                    )
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2, enabled = particlesEnabled && !particleTimeMode) {
+                    ToggleCard(
+                        title = LocalStrings.current["particles.star_mode"].ifEmpty { "STAR MODE" },
+                        description = LocalStrings.current["particles.star_mode_desc"].ifEmpty { "Replaces floating dots with tiny twinkling stars — pairs well with Time Mode at night" },
+                        checked = particleStarMode, onCheckedChange = { performHaptic(); onParticleStarModeChange(it) },
+                        colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode, enabled = particlesEnabled && !particleTimeMode
+                    )
+                }
+            }
+        ))
     }
 }
 
@@ -373,7 +365,7 @@ fun ParticlesMotionPanel(
         // Speed card
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = particlesEnabled) {
             val cardScale by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.85f,
+                targetValue = if (particlesEnabled) 1f else 0.90f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                     stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, LocalAnimationSpeed.current)
@@ -381,7 +373,7 @@ fun ParticlesMotionPanel(
                 label = "speed_scale"
             )
             val cardAlpha by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.25f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 260, easing = MotionTokens.Easing.velvet),
                 label = "speed_alpha"
             )
@@ -431,6 +423,7 @@ fun ParticlesMotionPanel(
                         )
                     }
                 }
+                DisabledCardWash(particlesEnabled, oledMode)
             }
         }
 
@@ -451,14 +444,24 @@ fun ParticlesMotionPanel(
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = particlesEnabled && particleParallaxEnabled) {
             val sensEnabled = particlesEnabled && particleParallaxEnabled
             val sensAlpha by animateFloatAsState(
-                targetValue = if (sensEnabled) 1f else 0.38f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 260, easing = MotionTokens.Easing.velvet),
                 label = "sens_alpha"
+            )
+            val sensScale by animateFloatAsState(
+                targetValue = if (sensEnabled) 1f else 0.90f,
+                animationSpec = tween(durationMillis = 260, easing = MotionTokens.Easing.emphasized),
+                label = "sens_scale"
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer(alpha = sensAlpha)
+                    .graphicsLayer {
+                        scaleX = sensScale
+                        scaleY = sensScale
+                        alpha = sensAlpha
+                    }
+                    .then(if (!sensEnabled) Modifier.pointerInput(sensEnabled) { detectTapGestures { } } else Modifier)
                     .then(
                         if (sensEnabled) Modifier.border(
                             width = 1.dp,
@@ -493,10 +496,12 @@ fun ParticlesMotionPanel(
                             selectedIndex = particleParallaxSensitivity.coerceIn(0, 2),
                             onOptionSelected = { performHaptic(); onParticleParallaxSensitivityChange(it) },
                             colors = colors, modifier = Modifier.fillMaxWidth(),
-                            enabled = sensEnabled
+                            enabled = sensEnabled,
+                            rescaleWhenDisabled = false
                         )
                     }
                 }
+                DisabledCardWash(sensEnabled, oledMode)
             }
         }
     }
@@ -531,7 +536,7 @@ fun ParticlesPerformancePanel(
         // Count card
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = particlesEnabled) {
             val cardScale by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.85f,
+                targetValue = if (particlesEnabled) 1f else 0.90f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                     stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, LocalAnimationSpeed.current)
@@ -539,7 +544,7 @@ fun ParticlesPerformancePanel(
                 label = "count_scale"
             )
             val cardAlpha by animateFloatAsState(
-                targetValue = if (particlesEnabled) 1f else 0.25f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 260, easing = MotionTokens.Easing.velvet),
                 label = "count_alpha"
             )
@@ -589,6 +594,7 @@ fun ParticlesPerformancePanel(
                         )
                     }
                 }
+                DisabledCardWash(particlesEnabled, oledMode)
             }
         }
 

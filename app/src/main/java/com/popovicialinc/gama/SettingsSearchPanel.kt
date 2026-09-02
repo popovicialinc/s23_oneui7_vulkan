@@ -158,7 +158,7 @@ internal fun AnimatedSearchPanelTitle(
             }
         }
 
-        LaunchedEffect(visible, titleKey) {
+        LaunchedEffect(visible, titleKey, text) {
             if (visible) {
                 progress.snapTo(0f)
                 if (animationLevel == 2) {
@@ -2009,8 +2009,8 @@ fun SettingsSearchPanel(
     val itemById = remember(items) { items.associateBy { it.id } }
 
     val globalShortcutVisible = !showAllSettings && query.trim().isBlank() && committedQuery.isBlank()
-    val globalFloatingButton: (@Composable (Modifier) -> Unit)? = if (globalShortcutVisible) {
-        { floatingModifier ->
+    val globalFloatingButton: (@Composable (Modifier, FloatingButtonHoldState, Boolean) -> Unit)? = if (globalShortcutVisible) {
+        { floatingModifier, holdState, isLeftSide ->
             PanelGlobalButton(
                 onClick = {
                     performHaptic()
@@ -2022,6 +2022,8 @@ fun SettingsSearchPanel(
                 oledMode = oledMode,
                 isSmallScreen = isSmallScreen,
                 enabled = visible && globalShortcutVisible,
+                floatingHoldState = holdState,
+                isLeftSide = isLeftSide,
                 modifier = floatingModifier
             )
         }

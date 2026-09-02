@@ -85,13 +85,15 @@ fun SettingsPanel(
         isLandscape = isLandscape, isSmallScreen = isSmallScreen,
         oledMode = oledMode, colors = colors,
         rootExitCascade = true,
-        leadingFloatingButton = { floatingModifier ->
+        leadingFloatingButton = { floatingModifier, holdState, isLeftSide ->
             PanelSearchButton(
                 onClick = { performHaptic(); onSearchClick() },
                 colors = colors,
                 oledMode = oledMode,
                 isSmallScreen = isSmallScreen,
                 enabled = visible,
+                floatingHoldState = holdState,
+                isLeftSide = isLeftSide,
                 modifier = floatingModifier
             )
         }
@@ -113,35 +115,44 @@ fun SettingsPanel(
             )
         }
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 6) {
-            SettingsNavigationCard(
-                title = strings["settings.appearance"].ifEmpty { "VISUALS" },
-                description = strings["settings.appearance_desc"].ifEmpty { "Colors, theme, effects, animations, and interface scale" },
-                onClick = { performHaptic(); onAppearanceClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
+        ResponsiveSettingsCardGrid(
+            isLandscape = isLandscape,
+            cards = listOf(
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 6) {
+                        SettingsNavigationCard(
+                            title = strings["settings.appearance"].ifEmpty { "VISUALS" },
+                            description = strings["settings.appearance_desc"].ifEmpty { "Colors, theme, effects, animations, and interface scale" },
+                            onClick = { performHaptic(); onAppearanceClick() },
+                            isSmallScreen = isSmallScreen, colors = colors,
+                            cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 6) {
+                        SettingsNavigationCard(
+                            title = strings["settings.renderer"].ifEmpty { "RENDERER" },
+                            description = strings["settings.renderer_desc"].ifEmpty { "Switching engine, aggressive mode, launcher and keyboard behavior" },
+                            onClick = { performHaptic(); onRendererClick() },
+                            isSmallScreen = isSmallScreen, colors = colors,
+                            cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
+                        SettingsNavigationCard(
+                            title = strings["settings.system"].ifEmpty { "SYSTEM" },
+                            description = strings["settings.system_desc"].ifEmpty { "Notifications, backup, language, integrations, and logs" },
+                            onClick = { performHaptic(); onSystemClick() },
+                            isSmallScreen = isSmallScreen, colors = colors,
+                            cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                }
             )
-        }
-
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 6) {
-            SettingsNavigationCard(
-                title = strings["settings.renderer"].ifEmpty { "RENDERER" },
-                description = strings["settings.renderer_desc"].ifEmpty { "Switching engine, aggressive mode, launcher and keyboard behavior" },
-                onClick = { performHaptic(); onRendererClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
-
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 5) {
-            SettingsNavigationCard(
-                title = strings["settings.system"].ifEmpty { "SYSTEM" },
-                description = strings["settings.system_desc"].ifEmpty { "Notifications, backup, language, integrations, and logs" },
-                onClick = { performHaptic(); onSystemClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
+        )
     }
 }
 

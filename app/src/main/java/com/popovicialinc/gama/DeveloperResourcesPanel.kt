@@ -195,20 +195,19 @@ fun ResourcesPanel(
             colors = colors, scrollState = scrollState
         )
 
-        // ── Links ─────────────────────────────────────────────────────────────
-        links.forEachIndexed { i, link ->
-            AnimatedElement(visible = visible, cardShadow = true, staggerIndex = i + 1, totalItems = totalItems) {
-                SettingsNavigationCard(
-                    title = link.title, description = link.desc,
-                    onClick = { onLinkSelected(link.url, link.title, link.linkDesc) },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode
-                )
-            }
-        }
-
-        // ── Integrations ──────────────────────────────────────────────────────
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 1, totalItems = totalItems) {
+        val cards = buildList<@Composable () -> Unit> {
+            links.forEachIndexed { index, link -> add {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = index + 1, totalItems = totalItems) {
+                    SettingsNavigationCard(
+                        title = link.title, description = link.desc,
+                        onClick = { onLinkSelected(link.url, link.title, link.linkDesc) },
+                        isSmallScreen = isSmallScreen, colors = colors,
+                        cardBackground = cardBackground, oledMode = oledMode
+                    )
+                }
+            } }
+            add {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 1, totalItems = totalItems) {
             IntegrationInfoCard(
                 title = LocalStrings.current["integrations.tasker"].ifEmpty { "TASKER" },
                 description = LocalStrings.current["integrations.tasker_desc"].ifEmpty { "Automate renderer switching based on app launch, time, WiFi, or any Tasker trigger via broadcast intents" },
@@ -226,9 +225,11 @@ fun ResourcesPanel(
                 colors = colors, cardBackground = cardBackground,
                 oledMode = oledMode, isSmallScreen = isSmallScreen
             )
-        }
+                }
+            }
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 2, totalItems = totalItems) {
+            add {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 2, totalItems = totalItems) {
             val tileAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
             IntegrationInfoCard(
                 title = LocalStrings.current["integrations.qs_tiles"].ifEmpty { "QUICK SETTINGS TILES" },
@@ -247,9 +248,11 @@ fun ResourcesPanel(
                 colors = colors, cardBackground = cardBackground,
                 oledMode = oledMode, isSmallScreen = isSmallScreen
             )
-        }
+                }
+            }
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 3, totalItems = totalItems) {
+            add {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = links.size + 3, totalItems = totalItems) {
             IntegrationInfoCard(
                 title = LocalStrings.current["integrations.widget"].ifEmpty { "HOME SCREEN WIDGET" },
                 description = LocalStrings.current["integrations.widget_desc"].ifEmpty { "A Vulkan / OpenGL toggle you can place on your home screen — switch renderers without opening the app" },
@@ -267,7 +270,10 @@ fun ResourcesPanel(
                 colors = colors, cardBackground = cardBackground,
                 oledMode = oledMode, isSmallScreen = isSmallScreen
             )
+                }
+            }
         }
+        ResponsiveSettingsCardGrid(isLandscape = isLandscape, cards = cards)
     }
 }
 

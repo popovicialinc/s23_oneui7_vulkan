@@ -80,6 +80,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -109,6 +111,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Calendar
 import kotlin.math.abs
 import kotlin.math.sin
@@ -251,6 +254,208 @@ fun BackArrowButton(
 }
 
 @Composable
+internal fun Modifier.repositionFloatingButtonOnLongHold(
+    isLeftSide: Boolean,
+    holdState: FloatingButtonHoldState?
+): Modifier {
+    if (holdState == null) return this
+    val controller = LocalFloatingButtonPositionController.current
+    val view = LocalView.current
+    return pointerInput(isLeftSide, controller, view.width, view.height) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            // Positioning is intentionally deliberate: a regular tap still works,
+            // while a three-second stationary hold enters drag mode.
+            val endedBeforeHold = withTimeoutOrNull(2_900L) {
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                        ?: return@withTimeoutOrNull true
+                    if (change.changedToUpIgnoreConsumed()) return@withTimeoutOrNull true
+                }
+            }
+            if (endedBeforeHold != null) return@awaitEachGesture
+
+            holdState.repositioning = true
+            holdState.suppressTap = true
+            var lastPosition = down.position
+            var x = if (isLeftSide) controller.leftX else controller.rightX
+            var y = if (isLeftSide) controller.leftY else controller.rightY
+            val horizontalSpan = (if (controller.fullWidth) view.width.toFloat() else view.width / 2f).coerceAtLeast(1f)
+            val height = view.height.toFloat().coerceAtLeast(1f)
+
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                if (change.changedToUpIgnoreConsumed()) break
+                val delta = change.position - lastPosition
+                lastPosition = change.position
+                x = (x + delta.x / horizontalSpan).coerceIn(0.16f, 0.84f)
+                y = (y + delta.y / height).coerceIn(0.08f, 0.92f)
+                if (isLeftSide) controller.onLeftMove(x, y) else controller.onRightMove(x, y)
+            }
+            holdState.repositioning = false
+        }
+    }
+}
+
+@Composable
+internal fun Modifier.floatingButtonGesture(
+    enabled: Boolean,
+    isLeftSide: Boolean,
+    isSettingsButton: Boolean = false,
+    holdState: FloatingButtonHoldState?,
+    onPressedChange: (Boolean) -> Unit,
+    onClick: () -> Unit
+): Modifier {
+    if (!enabled) return this
+    val controllerState = rememberUpdatedState(LocalFloatingButtonPositionController.current)
+    val latestPressedChange by rememberUpdatedState(onPressedChange)
+    val latestClick by rememberUpdatedState(onClick)
+    val context = LocalContext.current
+    val view = LocalView.current
+    return pointerInput(enabled, isLeftSide, holdState) {
+        awaitPointerEventScope {
+            while (true) {
+                val down = awaitPointerEvent().changes.firstOrNull { it.changedToDownIgnoreConsumed() }
+                    ?: continue
+            val hapticStartedAt = GamaHaptics.pressStart(context, view)
+            latestPressedChange(true)
+            holdState?.holding = true
+            val endedBeforeHold = withTimeoutOrNull(2_900L) {
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                        ?: return@withTimeoutOrNull true
+                    if (change.changedToUpIgnoreConsumed()) return@withTimeoutOrNull true
+                }
+            }
+            if (endedBeforeHold != null) {
+                holdState?.holding = false
+                latestPressedChange(false)
+                GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, true)
+                latestClick()
+                continue
+            }
+
+            // The same pointer stream now owns the drag, so releasing after a
+            // three-second hold cannot also trigger the button's normal action.
+            holdState?.repositioning = true
+            holdState?.suppressTap = true
+            val controller = controllerState.value
+            val originX = when {
+                isSettingsButton -> controller.settingsX
+                isLeftSide -> controller.leftX
+                else -> controller.rightX
+            }
+            val originY = when {
+                isSettingsButton -> controller.settingsY
+                isLeftSide -> controller.leftY
+                else -> controller.rightY
+            }
+            var totalDelta = Offset.Zero
+            val fullWidth = if (isSettingsButton) controller.settingsFullWidth else controller.fullWidth
+            val horizontalSpan = (if (fullWidth) view.width.toFloat() else view.width / 2f).coerceAtLeast(1f)
+            val height = view.height.toFloat().coerceAtLeast(1f)
+            val minX = if (fullWidth) 0.04f else 0.16f
+            val maxX = if (fullWidth) 0.96f else 0.84f
+            val minY = 0.50f
+            val grid = adaptiveSquareSnapGrid(
+                horizontalPixels = horizontalSpan,
+                verticalPixels = height * (0.96f - minY)
+            )
+            var finalX = originX
+            var finalY = originY
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                if (change.changedToUpIgnoreConsumed()) break
+                // Graphics translation changes the local pointer coordinates. Add
+                // the current visual translation back to obtain a stable physical
+                // delta from the original finger-down location.
+                totalDelta = change.position - down.position + Offset(
+                    holdState?.dragTranslationX ?: 0f,
+                    holdState?.dragTranslationY ?: 0f
+                )
+                val previewX = snapFloatingButtonGrid(
+                    (originX + totalDelta.x / horizontalSpan).coerceIn(minX, maxX), minX, maxX, grid.horizontalSteps
+                )
+                val previewY = snapFloatingButtonGrid(
+                    (originY + totalDelta.y / height).coerceIn(minY, 0.96f), minY, 0.96f, grid.verticalSteps
+                )
+                finalX = previewX
+                finalY = previewY
+                holdState?.dragTranslationX = (previewX - originX) * horizontalSpan
+                holdState?.dragTranslationY = (previewY - originY) * height
+                controller.livePositions.set(isLeftSide, isSettingsButton, previewX, previewY)
+            }
+            // Commit exactly the last previewed grid cell. Recomputing from the
+            // transformed node's local pointer coordinates here can reintroduce
+            // the old anchor on the pointer-up event.
+            when {
+                isSettingsButton -> controller.onSettingsMove(finalX, finalY)
+                isLeftSide -> controller.onLeftMove(finalX, finalY)
+                else -> controller.onRightMove(finalX, finalY)
+            }
+            holdState?.dragTranslationX = 0f
+            holdState?.dragTranslationY = 0f
+            holdState?.holding = false
+            latestPressedChange(false)
+            GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, false)
+            holdState?.repositioning = false
+            }
+        }
+    }
+}
+
+private fun snapFloatingButtonGrid(value: Float, min: Float, max: Float, steps: Int): Float {
+    val fraction = ((value - min) / (max - min)).coerceIn(0f, 1f)
+    return min + (fraction * steps).roundToInt().coerceIn(0, steps) * (max - min) / steps
+}
+
+private data class FloatingSnapGrid(val horizontalSteps: Int, val verticalSteps: Int)
+
+private fun adaptiveSquareSnapGrid(horizontalPixels: Float, verticalPixels: Float): FloatingSnapGrid {
+    val ratio = (horizontalPixels / verticalPixels).coerceAtLeast(0.01f)
+    return if (ratio >= 1f) {
+        val verticalSteps = 4
+        FloatingSnapGrid(
+            horizontalSteps = (verticalSteps * ratio).roundToInt().coerceIn(4, 20),
+            verticalSteps = verticalSteps
+        )
+    } else {
+        val horizontalSteps = 4
+        FloatingSnapGrid(
+            horizontalSteps = horizontalSteps,
+            verticalSteps = (horizontalSteps / ratio).roundToInt().coerceIn(4, 20)
+        )
+    }
+}
+
+@Composable
+internal fun FloatingHoldIndicator(
+    holdState: FloatingButtonHoldState?,
+    color: Color,
+    indicatorSize: Dp
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (holdState?.holding == true) 1f else 0f,
+        animationSpec = tween(durationMillis = 2_900, easing = LinearEasing),
+        label = "floating_button_hold_progress"
+    )
+    if (progress <= 0f) return
+    Canvas(modifier = Modifier.size(indicatorSize)) {
+        val stroke = 2.5.dp.toPx()
+        val radius = minOf(size.width, size.height) * (0.34f + progress * 0.13f)
+        drawArc(
+            color = color.copy(alpha = 0.42f + progress * 0.5f),
+            startAngle = -90f,
+            sweepAngle = 360f * progress,
+            useCenter = false,
+            topLeft = Offset(this.size.width / 2f - radius, this.size.height / 2f - radius),
+            size = Size(radius * 2f, radius * 2f),
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
 fun PanelBackButton(
     onClick: () -> Unit,
     colors: ThemeColors,
@@ -258,6 +463,8 @@ fun PanelBackButton(
     isSmallScreen: Boolean = false,
     enabled: Boolean = true,
     scrollState: ScrollState? = null,
+    floatingHoldState: FloatingButtonHoldState? = null,
+    isLeftSide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -345,6 +552,7 @@ fun PanelBackButton(
             )
         }
         // Button surface — square with rounded corners, same as Settings button
+        FloatingHoldIndicator(floatingHoldState, colors.primaryAccent, glowSize)
         Box(
             modifier = Modifier
                 .size(btnSize)
@@ -371,19 +579,13 @@ fun PanelBackButton(
                     colors.primaryAccent.copy(alpha = borderAlphaVal),
                     RoundedCornerShape(28.dp)
                 )
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectTapGestures(
-                        onPress = {
-                            val hapticStartedAt = GamaHaptics.pressStart(context, view)
-                            isPressed = true
-                            val released = tryAwaitRelease()
-                            isPressed = false
-                            GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, released)
-                            if (released) currentOnClick()
-                        }
-                    )
-                },
+                .floatingButtonGesture(
+                    enabled = enabled,
+                    isLeftSide = isLeftSide,
+                    holdState = floatingHoldState,
+                    onPressedChange = { isPressed = it },
+                    onClick = currentOnClick
+                ),
             contentAlignment = Alignment.Center
         ) {
             Canvas(
@@ -418,6 +620,8 @@ fun PanelSearchButton(
     oledMode: Boolean = false,
     isSmallScreen: Boolean = false,
     enabled: Boolean = true,
+    floatingHoldState: FloatingButtonHoldState? = null,
+    isLeftSide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -495,6 +699,7 @@ fun PanelSearchButton(
             )
         }
 
+        FloatingHoldIndicator(floatingHoldState, colors.primaryAccent, glowSize)
         Box(
             modifier = Modifier
                 .size(btnSize)
@@ -522,19 +727,13 @@ fun PanelSearchButton(
                     RoundedCornerShape(28.dp)
                 )
                 .semantics { contentDescription = strings["search.content_description"].ifEmpty { "Search settings" } }
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectTapGestures(
-                        onPress = {
-                            val hapticStartedAt = GamaHaptics.pressStart(context, view)
-                            isPressed = true
-                            val released = tryAwaitRelease()
-                            isPressed = false
-                            GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, released)
-                            if (released) currentOnClick()
-                        }
-                    )
-                },
+                .floatingButtonGesture(
+                    enabled = enabled,
+                    isLeftSide = isLeftSide,
+                    holdState = floatingHoldState,
+                    onPressedChange = { isPressed = it },
+                    onClick = currentOnClick
+                ),
             contentAlignment = Alignment.Center
         ) {
             Canvas(
@@ -570,6 +769,8 @@ fun PanelGlobalButton(
     oledMode: Boolean = false,
     isSmallScreen: Boolean = false,
     enabled: Boolean = true,
+    floatingHoldState: FloatingButtonHoldState? = null,
+    isLeftSide: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
@@ -647,6 +848,7 @@ fun PanelGlobalButton(
             )
         }
 
+        FloatingHoldIndicator(floatingHoldState, colors.primaryAccent, glowSize)
         Box(
             modifier = Modifier
                 .size(btnSize)
@@ -674,19 +876,13 @@ fun PanelGlobalButton(
                     RoundedCornerShape(28.dp)
                 )
                 .semantics { contentDescription = strings["search.global_shortcut_content_description"].ifEmpty { "Open global settings list" } }
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
-                    detectTapGestures(
-                        onPress = {
-                            val hapticStartedAt = GamaHaptics.pressStart(context, view)
-                            isPressed = true
-                            val released = tryAwaitRelease()
-                            isPressed = false
-                            GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, released)
-                            if (released) currentOnClick()
-                        }
-                    )
-                },
+                .floatingButtonGesture(
+                    enabled = enabled,
+                    isLeftSide = isLeftSide,
+                    holdState = floatingHoldState,
+                    onPressedChange = { isPressed = it },
+                    onClick = currentOnClick
+                ),
             contentAlignment = Alignment.Center
         ) {
             Canvas(

@@ -32,7 +32,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -100,6 +101,7 @@ import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,6 +117,7 @@ import kotlin.math.sin
 import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 
 data class FloatingBackButtonAvoidance(
@@ -185,19 +188,81 @@ fun AnimatedElement(
     val context = LocalContext.current
     val backButtonAvoidance = LocalFloatingBackButtonAvoidance.current
     val backButtonInversed = LocalBackButtonInversed.current
+    val floatingButtonAnchors = LocalFloatingButtonAnchors.current
+    val floatingButtonController = LocalFloatingButtonPositionController.current
     var overlapsFloatingBackButton by remember { mutableStateOf(false) }
     var lastAvoidanceHapticAtMs by remember { mutableStateOf(0L) }
+    var avoidanceInsetTargetPx by remember { mutableFloatStateOf(0f) }
+    var avoidanceInsetOnStart by remember { mutableStateOf(false) }
+    var cardBounds by remember { mutableStateOf<Rect?>(null) }
     val shouldAvoidBackButton = cardShadow || avoidBackButton
 
-    val avoidEndPadding by animateDpAsState(
-        targetValue = if (shouldAvoidBackButton && backButtonAvoidance.enabled && overlapsFloatingBackButton)
-            backButtonAvoidance.endPadding
-        else 0.dp,
+    fun updateAvoidance(bounds: Rect) {
+        val screenHeight = view.height.toFloat().takeIf { it > 0f } ?: return
+        val screenWidth = view.width.toFloat().takeIf { it > 0f } ?: return
+        val anchorX = if (backButtonInversed) {
+            floatingButtonController.livePositions.leftX ?: floatingButtonAnchors.leftX
+        } else {
+            floatingButtonController.livePositions.rightX ?: floatingButtonAnchors.rightX
+        }
+        val anchorY = if (backButtonInversed) {
+            floatingButtonController.livePositions.leftY ?: floatingButtonAnchors.leftY
+        } else {
+            floatingButtonController.livePositions.rightY ?: floatingButtonAnchors.rightY
+        }
+        val calculatedButtonX = if (floatingButtonAnchors.fullWidth) {
+            screenWidth * anchorX
+        } else if (backButtonInversed) {
+            screenWidth * 0.5f * anchorX
+        } else {
+            screenWidth * (0.5f + 0.5f * anchorX)
+        }
+        val calculatedButtonY = screenHeight * anchorY
+        val buttonX = calculatedButtonX
+        val buttonY = calculatedButtonY
+        val avoidRadius = with(density) { (backButtonAvoidance.buttonSize / 2 + 16.dp).toPx() }
+        val nearestX = buttonX.coerceIn(bounds.left, bounds.right)
+        val nearestY = buttonY.coerceIn(bounds.top, bounds.bottom)
+        val distance = sqrt((nearestX - buttonX) * (nearestX - buttonX) + (nearestY - buttonY) * (nearestY - buttonY))
+        val overlaps = distance < avoidRadius
+        if (overlaps) {
+            val buttonIsLeftOfCard = buttonX < (bounds.left + bounds.right) / 2f
+            avoidanceInsetOnStart = buttonIsLeftOfCard
+            // Reserve actual horizontal space for the floating button instead
+            // of scaling the card. The narrower constraint lets its text wrap
+            // naturally, so height grows as it would with a normal margin.
+            val requiredClearance = avoidRadius + with(density) { 10.dp.toPx() }
+            avoidanceInsetTargetPx = if (buttonIsLeftOfCard) {
+                (buttonX + requiredClearance - bounds.left).coerceAtLeast(0f)
+            } else {
+                (bounds.right - (buttonX - requiredClearance)).coerceAtLeast(0f)
+            }.coerceAtMost(
+                (bounds.width - with(density) { 64.dp.toPx() }).coerceAtLeast(0f)
+            )
+        } else {
+            avoidanceInsetTargetPx = 0f
+        }
+        if (overlapsFloatingBackButton != overlaps) {
+            overlapsFloatingBackButton = overlaps
+            val now = SystemClock.uptimeMillis()
+            if (now - lastAvoidanceHapticAtMs > 140L) {
+                lastAvoidanceHapticAtMs = now
+                if (overlaps) GamaHaptics.avoidanceDodge(context, view)
+                else GamaHaptics.avoidanceReturn(context, view)
+            }
+        }
+    }
+    LaunchedEffect(cardBounds, floatingButtonAnchors, floatingButtonController.livePositions.leftX, floatingButtonController.livePositions.leftY, floatingButtonController.livePositions.rightX, floatingButtonController.livePositions.rightY, backButtonInversed, shouldAvoidBackButton, backButtonAvoidance.enabled) {
+        if (shouldAvoidBackButton && backButtonAvoidance.enabled) cardBounds?.let(::updateAvoidance)
+        else avoidanceInsetTargetPx = 0f
+    }
+    val avoidanceInsetPx by animateFloatAsState(
+        targetValue = if (shouldAvoidBackButton && backButtonAvoidance.enabled) avoidanceInsetTargetPx else 0f,
         animationSpec = spring(
             dampingRatio = 0.7f,
             stiffness = MotionTokens.SpeedUtil.stiffness(300f, animSpeed)
         ),
-        label = "floating_back_button_avoidance"
+        label = "floating_back_button_avoidance_inset"
     )
 
     // ── Performance-optimised stagger ────────────────────────────────────────
@@ -304,51 +369,77 @@ fun AnimatedElement(
     ) {
         val avoidanceModifier = if (shouldAvoidBackButton && backButtonAvoidance.enabled) {
             Modifier.onGloballyPositioned { coordinates ->
-                val position = coordinates.positionInWindow()
-                val itemTop = position.y
-                val itemBottom = itemTop + coordinates.size.height
-                val screenHeight = view.height.toFloat().takeIf { it > 0f } ?: return@onGloballyPositioned
-
-                val avoidZoneTop = screenHeight - with(density) {
-                    (backButtonAvoidance.bottomPadding + backButtonAvoidance.buttonSize + 16.dp).toPx()
-                }
-
-                val overlaps = itemBottom > avoidZoneTop && itemTop < screenHeight
-                if (overlapsFloatingBackButton != overlaps) {
-                    overlapsFloatingBackButton = overlaps
-                    val now = SystemClock.uptimeMillis()
-                    if (now - lastAvoidanceHapticAtMs > 140L) {
-                        lastAvoidanceHapticAtMs = now
-                        if (overlaps) {
-                            GamaHaptics.avoidanceDodge(context, view)
-                        } else {
-                            GamaHaptics.avoidanceReturn(context, view)
-                        }
-                    }
-                }
+                val position = coordinates.positionInRoot()
+                cardBounds = Rect(
+                    left = position.x,
+                    top = position.y,
+                    right = position.x + coordinates.size.width,
+                    bottom = position.y + coordinates.size.height
+                )
             }
         } else Modifier
 
-        val safeAvoidEndPadding = avoidEndPadding.coerceAtLeast(0.dp)
         val cardModifier = modifier
             .then(avoidanceModifier)
-            .padding(
-                start = if (backButtonInversed) safeAvoidEndPadding else 0.dp,
-                end = if (backButtonInversed) 0.dp else safeAvoidEndPadding
-            )
 
-        Box(
-            modifier = (if (cardShadow) cardModifier.directionalShadow() else cardModifier)
-                .graphicsLayer {
-                    val p = progress.value
-                    alpha = p.coerceIn(0f, 1f)
-                    scaleX = 0.94f + p * 0.06f
-                    scaleY = scaleX
-                    translationY = (1f - p) * offsetYPx
-                    clip = false
-                }
-        ) {
-            content()
+        val animatedModifier = Modifier.graphicsLayer {
+            val p = progress.value
+            alpha = p.coerceIn(0f, 1f)
+            val enterScale = 0.94f + p * 0.06f
+            scaleX = enterScale
+            scaleY = enterScale
+            translationY = (1f - p) * offsetYPx
+            clip = false
+        }
+
+        if (shouldAvoidBackButton && backButtonAvoidance.enabled) {
+            // Keep the measured slot stable while the inner card narrows. This
+            // prevents the inset animation from feeding its own bounds back
+            // into the collision calculation during the return-to-normal pass.
+            Box(modifier = cardModifier.fillMaxWidth()) {
+                val inset = with(density) { avoidanceInsetPx.toDp() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .layout { measurable, constraints ->
+                            val insetPx = with(density) { inset.toPx().roundToInt() }
+                                .coerceAtLeast(0)
+                            val contentMaxWidth = if (constraints.hasBoundedWidth) {
+                                (constraints.maxWidth - insetPx).coerceAtLeast(0)
+                            } else {
+                                Constraints.Infinity
+                            }
+                            val contentMinWidth = (constraints.minWidth - insetPx).coerceAtLeast(0)
+                                .coerceAtMost(contentMaxWidth)
+                            val placeable = measurable.measure(
+                                constraints.copy(
+                                    minWidth = contentMinWidth,
+                                    maxWidth = contentMaxWidth
+                                )
+                            )
+                            val width = if (constraints.hasBoundedWidth) {
+                                constraints.maxWidth
+                            } else {
+                                placeable.width + insetPx
+                            }
+                            layout(width, placeable.height) {
+                                placeable.placeRelative(
+                                    if (avoidanceInsetOnStart) insetPx else 0,
+                                    0
+                                )
+                            }
+                        }
+                        .then(if (cardShadow) Modifier.directionalShadow() else Modifier)
+                        .then(animatedModifier)
+                ) { content() }
+            }
+        } else {
+            Box(
+                modifier = (if (cardShadow) cardModifier.directionalShadow() else cardModifier)
+                    .then(animatedModifier)
+            ) {
+                content()
+            }
         }
     }
 }

@@ -564,7 +564,9 @@ fun BigRendererButton(
     val screenMinDp = minOf(configuration.screenWidthDp, configuration.screenHeightDp)
     val buttonHeight = when {
         isSmallScreen -> 88.dp
-        isLandscape   -> (screenMinDp * 0.26f).dp.coerceIn(80.dp, 110.dp)
+        // Keep the renderer row compact enough to leave a real touch target for
+        // Resources below it on short landscape windows / large display zoom.
+        isLandscape   -> (screenMinDp * 0.20f).dp.coerceIn(56.dp, 78.dp)
         else          -> (screenMinDp * 0.30f).dp.coerceIn(90.dp, 130.dp)
     }
 
@@ -621,11 +623,7 @@ fun BigRendererButton(
                     )
             )
 
-            Column(
-                modifier = Modifier.padding(horizontal = (buttonSize.value * 0.05f).dp.coerceIn(4.dp, 12.dp)),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
+            val rendererIcon: @Composable () -> Unit = {
                 Canvas(modifier = Modifier.size(iconSizeDp)) {
                     val r = size.minDimension * 0.52f
                     if (allowIconGlow) {
@@ -650,7 +648,35 @@ fun BigRendererButton(
                     }
                     drawIconShape(iconType, size, iconColor)
                 }
-                Spacer(modifier = Modifier.height(spacerDp))
+            }
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = (buttonSize.value * 0.10f).dp.coerceIn(8.dp, 16.dp)),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rendererIcon()
+                    Spacer(modifier = Modifier.width(spacerDp))
+                    Text(
+                        text = text,
+                        color = textColor,
+                        fontSize = ts.buttonLarge,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = quicksandFontFamily,
+                        maxLines = 1,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.padding(horizontal = (buttonSize.value * 0.05f).dp.coerceIn(4.dp, 12.dp)),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    rendererIcon()
+                    Spacer(modifier = Modifier.height(spacerDp))
                 Text(
                     text = text,
                     color = textColor,
@@ -661,6 +687,7 @@ fun BigRendererButton(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
+                }
             }
         }
     }
@@ -704,11 +731,8 @@ fun DialogButton(
         )
     }
     val pp = pressProgress.value
-    val nudgePx = with(density) { 1.5.dp.toPx() }
     // Derive all press visuals from pp — evaluated in draw phase via graphicsLayer
     val pressScale       = 1f - pp * (1f - MotionTokens.Scale.subtle)
-    val textScaleVal     = 0.93f + (1f - 0.93f) * (1f - pp)
-    val textTranslateYVal = pp * nudgePx
     val borderWidthDp    = (if (oledMode) 0.75f else 1f) + pp * (if (oledMode) 0.75f else 1f)  // 1dp → 2dp
     val borderAlphaVal   = 0.5f + pp * 0.5f
 
@@ -779,11 +803,6 @@ fun DialogButton(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer(
-                        scaleX = textScaleVal,
-                        scaleY = textScaleVal,
-                        translationY = textTranslateYVal
-                    )
             )
         }
     }

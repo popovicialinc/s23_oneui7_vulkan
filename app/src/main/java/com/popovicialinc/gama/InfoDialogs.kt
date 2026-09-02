@@ -120,6 +120,16 @@ fun ShizukuHelpDialog(
     val dialogBorderWidth = 1.dp
     val dialogShape = RoundedCornerShape(40.dp)
     val context = LocalContext.current
+    val dialogContentPadding = when {
+        isLandscape -> 16.dp
+        isSmallScreen -> 22.dp
+        else -> 28.dp
+    }
+    val dialogItemSpacing = when {
+        isLandscape -> 10.dp
+        isSmallScreen -> 14.dp
+        else -> 18.dp
+    }
     // Shizuku already on this device? Decides whether the primary action is
     // "download & install" or "open the app". Updated to true once a download
     // completes, so the panel transitions to the "installed" view on the spot.
@@ -130,10 +140,18 @@ fun ShizukuHelpDialog(
     }
 
     BouncyDialog(visible = visible, onDismiss = onDismiss) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
     Card(
         modifier = Modifier
             .fillMaxWidth(if (isLandscape && !isTablet) 0.6f else 0.9f)
             .widthIn(max = 500.dp)
+            // A scrollable child must have a bounded height. Without this, a
+            // landscape dialog measures to its full content height and extends
+            // below the screen instead of becoming scrollable.
+            .heightIn(max = maxHeight * 0.90f)
             .directionalShadow(cornerRadius = 28.dp)
             .border(
                 width = dialogBorderWidth,
@@ -151,9 +169,9 @@ fun ShizukuHelpDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(if (isSmallScreen) 22.dp else 28.dp),
+                .padding(dialogContentPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 14.dp else 18.dp)
+            verticalArrangement = Arrangement.spacedBy(dialogItemSpacing)
         ) {
             // ── Title — accent-coloured, matches ExternalLinkConfirmDialog ──
             Box(
@@ -162,7 +180,7 @@ fun ShizukuHelpDialog(
             ) {
                 Text(
                     text = if (helpType == "not_running") "Shizuku isn't running" else "Permission Needed",
-                    fontSize = ts.headlineLarge,
+                    fontSize = if (isLandscape) ts.headlineMedium else ts.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
                     color = colors.primaryAccent
@@ -406,6 +424,7 @@ fun ShizukuHelpDialog(
             )
         }
     }
+    } // BoxWithConstraints
     } // BouncyDialog
 }
 
@@ -468,6 +487,7 @@ fun EasterEggDialog(
 ) {
     val ts = LocalTypeScale.current
     val animLevel = LocalAnimationLevel.current
+    val dialogShape = RoundedCornerShape(28.dp)
     BouncyDialog(visible = visible, onDismiss = onDismiss) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -479,7 +499,7 @@ fun EasterEggDialog(
                     .widthIn(max = 460.dp)
                     .pointerInput(Unit) { detectTapGestures { } },
                 colors = CardDefaults.cardColors(containerColor = cardBackground),
-                shape = RoundedCornerShape(28.dp),
+                shape = dialogShape,
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Box(
@@ -494,9 +514,9 @@ fun EasterEggDialog(
                                     colors.primaryAccent.copy(alpha = 0.05f)
                                 )
                             ),
-                            shape = RoundedCornerShape(40.dp)
+                            shape = dialogShape
                         )
-                        .clip(RoundedCornerShape(40.dp))
+                        .clip(dialogShape)
                 ) {
                     // ── Ambient glow blob at the top — only runs while dialog is visible ──
                     val glowPulse = rememberInfiniteTransition(label = "egg_glow")
@@ -554,6 +574,18 @@ fun EasterEggDialog(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(0.dp)
                     ) {
+                        Text(
+                            text = "ACCESS GRANTED // 01",
+                            fontSize = ts.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = quicksandFontFamily,
+                            color = colors.primaryAccent.copy(alpha = 0.78f),
+                            letterSpacing = 2.2.sp,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(Modifier.height(if (isSmallScreen) 14.dp else 18.dp))
+
                         // ── GAMA wordmark with glow ───────────────────────────
                         val gamaSize = if (isSmallScreen) (ts.displayLarge.value * 1.4f).sp
                         else (ts.displayLarge.value * 1.7f).sp
@@ -617,7 +649,7 @@ fun EasterEggDialog(
 
                         // ── Main copy ─────────────────────────────────────────
                         Text(
-                            text = "Graphics API Manager\nfor Android",
+                            text = "THE UNNECESSARY\nCONTROL ROOM",
                             fontSize = ts.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             fontFamily = quicksandFontFamily,
@@ -629,7 +661,7 @@ fun EasterEggDialog(
                         Spacer(Modifier.height(if (isSmallScreen) 16.dp else 22.dp))
 
                         Text(
-                            text = LocalStrings.current["dialogs.easter_egg_subtitle"].replace("\\n","\n").ifEmpty { "Built with obsessive attention to detail,\nlate nights, and too much hot cocoa." },
+                            text = "One long press. One small secret.\nZero extra permissions.",
                             fontSize = ts.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             fontFamily = quicksandFontFamily,
@@ -641,7 +673,7 @@ fun EasterEggDialog(
                         Spacer(Modifier.height(if (isSmallScreen) 8.dp else 10.dp))
 
                         Text(
-                            text = LocalStrings.current["dialogs.easter_egg_thanks"].ifEmpty { "Thanks for using it." },
+                            text = "You were never supposed to find this.\n(We hoped you would.)",
                             fontSize = ts.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             fontFamily = quicksandFontFamily,
@@ -665,7 +697,7 @@ fun EasterEggDialog(
 
                         // ── Dismiss button ────────────────────────────────────
                         DialogButton(
-                            text = LocalStrings.current["dialogs.btn_nice"].ifEmpty { "❤️  Nice" },
+                            text = "RETURN TO GAMA",
                             onClick = onDismiss,
                             modifier = Modifier.fillMaxWidth(),
                             colors = colors,

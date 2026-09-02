@@ -331,28 +331,44 @@ fun IntegrationInfoDialog(
 ) {
     val ts = LocalTypeScale.current
     val context = LocalContext.current
+    val dialogPadding = when {
+        isLandscape -> 16.dp
+        isSmallScreen -> 22.dp
+        else -> 30.dp
+    }
+    val itemSpacing = when {
+        isLandscape -> 10.dp
+        isSmallScreen -> 18.dp
+        else -> 22.dp
+    }
 
     BouncyDialog(visible = visible, onDismiss = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(if (isLandscape && !isTablet) 0.64f else 0.9f)
-                .widthIn(max = 540.dp)
-                .border(0.75.dp, colors.primaryAccent.copy(alpha = 0.3f), RoundedCornerShape(28.dp))
-                .pointerInput(Unit) { detectTapGestures { } },
-            colors = CardDefaults.cardColors(containerColor = cardBackground),
-            shape = RoundedCornerShape(28.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(if (isSmallScreen) 22.dp else 30.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 18.dp else 22.dp)
+                    .fillMaxWidth(if (isLandscape && !isTablet) 0.64f else 0.9f)
+                    .widthIn(max = 540.dp)
+                    .heightIn(max = maxHeight * 0.90f)
+                    .border(0.75.dp, colors.primaryAccent.copy(alpha = 0.3f), RoundedCornerShape(28.dp))
+                    .pointerInput(Unit) { detectTapGestures { } },
+                colors = CardDefaults.cardColors(containerColor = cardBackground),
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(dialogPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                ) {
                 Text(
                     text = title,
-                    fontSize = ts.headlineLarge,
+                    fontSize = if (isLandscape) ts.headlineMedium else ts.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
                     color = colors.primaryAccent,
@@ -362,8 +378,8 @@ fun IntegrationInfoDialog(
 
                 Text(
                     text = body,
-                    fontSize = ts.bodyLarge,
-                    lineHeight = (ts.bodyLarge.value * 1.4f).sp,
+                    fontSize = if (isLandscape) ts.bodyMedium else ts.bodyLarge,
+                    lineHeight = ((if (isLandscape) ts.bodyMedium else ts.bodyLarge).value * 1.35f).sp,
                     color = colors.textPrimary.copy(alpha = 0.85f),
                     fontFamily = quicksandFontFamily,
                     textAlign = TextAlign.Center,
@@ -403,6 +419,7 @@ fun IntegrationInfoDialog(
                     colors = colors,
                     cardBackground = cardBackground
                 )
+                }
             }
         }
     }

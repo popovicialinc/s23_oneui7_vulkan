@@ -601,11 +601,11 @@ internal fun CrashDetailPanel(
         AnimatedElement(
             visible = visible,
             cardShadow = false,
-            staggerIndex = 2,
-            totalItems = 4,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+                staggerIndex = 2,
+                totalItems = 4,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
         ) {
             Card(
                 modifier = Modifier

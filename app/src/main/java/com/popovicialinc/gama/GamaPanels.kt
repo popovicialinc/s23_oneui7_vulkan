@@ -108,24 +108,33 @@ fun VisualEffectsPanel(
         )
 
         // EFFECTS and COLORS — at the top so they're always easy to reach
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 8) {
-            SettingsNavigationCard(
-                title = LocalStrings.current["effects.title"].ifEmpty { "EFFECTS" },
-                description = LocalStrings.current["effects.effects_desc"].ifEmpty { "Background gradient, frosted glass blur, and floating particles" },
-                onClick = { performHaptic(); onEffectsClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
+        ResponsiveSettingsCardGrid(
+            isLandscape = isLandscape,
+            cards = listOf(
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["effects.title"].ifEmpty { "EFFECTS" },
+                            description = LocalStrings.current["effects.effects_desc"].ifEmpty { "Background gradient, frosted glass blur, and floating particles" },
+                            onClick = { performHaptic(); onEffectsClick() },
+                            isSmallScreen = isSmallScreen, colors = colors,
+                            cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["colors.title"].ifEmpty { "COLORS" },
+                            description = LocalStrings.current["colors.colors_desc"].ifEmpty { "Accent color, gradient palette, and Material You theming" },
+                            onClick = { performHaptic(); onColorsClick() },
+                            isSmallScreen = isSmallScreen, colors = colors,
+                            cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                }
             )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 8) {
-            SettingsNavigationCard(
-                title = LocalStrings.current["colors.title"].ifEmpty { "COLORS" },
-                description = LocalStrings.current["colors.colors_desc"].ifEmpty { "Accent color, gradient palette, and Material You theming" },
-                onClick = { performHaptic(); onColorsClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
+        )
 
         // Theme — always available. Dark mode itself now uses pure OLED black.
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 8) {
@@ -382,7 +391,7 @@ fun GradientPanel(
         // ── Enable toggle ─────────────────────────────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = gradientAvailable) {
             val gradientCardScale by animateFloatAsState(
-                targetValue = if (gradientAvailable) 1f else 0.92f,
+                targetValue = if (gradientAvailable) 1f else 0.80f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.smooth.dampingRatio,
                     stiffness = MotionTokens.Springs.smooth.stiffness
@@ -396,7 +405,7 @@ fun GradientPanel(
                     .graphicsLayer(
                         scaleX = gradientCardScale,
                         scaleY = gradientCardScale,
-                        alpha = if (gradientAvailable) 1f else 0.42f
+                        alpha = if (gradientAvailable) 1f else 0.50f
                     )
             ) {
                 ToggleCard(
@@ -495,50 +504,59 @@ fun RendererPanel(
             colors = colors
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["renderer.aggressive_mode"].ifEmpty { "AGGRESSIVE MODE" },
-                description = LocalStrings.current["renderer.aggressive_mode_desc"].ifEmpty { "Applies the renderer to every installed package — broader coverage, but read the warning before enabling" },
-                checked = aggressiveMode,
-                onCheckedChange = { performHaptic(); onAggressiveModeChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                accentBorder = true
+        ResponsiveSettingsCardGrid(
+            isLandscape = isLandscape,
+            cards = listOf(
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
+                        ToggleCard(
+                            title = LocalStrings.current["renderer.aggressive_mode"].ifEmpty { "AGGRESSIVE MODE" },
+                            description = LocalStrings.current["renderer.aggressive_mode_desc"].ifEmpty { "Applies the renderer to every installed package — broader coverage, but read the warning before enabling" },
+                            checked = aggressiveMode,
+                            onCheckedChange = { performHaptic(); onAggressiveModeChange(it) },
+                            colors = colors, cardBackground = cardBackground,
+                            isSmallScreen = isSmallScreen, oledMode = oledMode, accentBorder = true
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
+                        ToggleCard(
+                            title = LocalStrings.current["renderer.kill_launcher"].ifEmpty { "RESTART LAUNCHER ON SWITCH" },
+                            description = LocalStrings.current["renderer.kill_launcher_desc"].ifEmpty { "Restarts the launcher and System UI after switching so the new renderer applies to the system chrome too — leave off on Xiaomi / MIUI" },
+                            checked = killLauncher,
+                            onCheckedChange = { performHaptic(); onKillLauncherChange(it) },
+                            colors = colors, cardBackground = cardBackground,
+                            isSmallScreen = isSmallScreen, oledMode = oledMode, accentBorder = true
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
+                        ToggleCard(
+                            title = LocalStrings.current["renderer.kill_keyboard"].ifEmpty { "RESTART KEYBOARD ON SWITCH" },
+                            description = LocalStrings.current["renderer.kill_keyboard_desc"].ifEmpty { "Force-stops the currently selected keyboard after applying the renderer, so it reloads with the new graphics API" },
+                            checked = killKeyboard,
+                            onCheckedChange = { performHaptic(); onKillKeyboardChange(it) },
+                            colors = colors, cardBackground = cardBackground,
+                            isSmallScreen = isSmallScreen, oledMode = oledMode, accentBorder = true
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4) {
+                        ToggleCard(
+                            title = LocalStrings.current["renderer.show_gpuwatch_toggle"].ifEmpty { "GPUWATCH SHORTCUT" },
+                            description = LocalStrings.current["renderer.show_gpuwatch_desc"].ifEmpty { "Adds an Open GPUWatch button on the main screen. Samsung devices only." },
+                            checked = showGpuWatchButton,
+                            onCheckedChange = { performHaptic(); onShowGpuWatchButtonChange(it) },
+                            colors = colors, cardBackground = cardBackground,
+                            isSmallScreen = isSmallScreen, oledMode = oledMode, accentBorder = true
+                        )
+                    }
+                }
             )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["renderer.kill_launcher"].ifEmpty { "RESTART LAUNCHER ON SWITCH" },
-                description = LocalStrings.current["renderer.kill_launcher_desc"].ifEmpty { "Restarts the launcher and System UI after switching so the new renderer applies to the system chrome too — leave off on Xiaomi / MIUI" },
-                checked = killLauncher,
-                onCheckedChange = { performHaptic(); onKillLauncherChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                accentBorder = true
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["renderer.kill_keyboard"].ifEmpty { "RESTART KEYBOARD ON SWITCH" },
-                description = LocalStrings.current["renderer.kill_keyboard_desc"].ifEmpty { "Force-stops the currently selected keyboard after applying the renderer, so it reloads with the new graphics API" },
-                checked = killKeyboard,
-                onCheckedChange = { performHaptic(); onKillKeyboardChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                accentBorder = true
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["renderer.show_gpuwatch_toggle"].ifEmpty { "GPUWATCH SHORTCUT" },
-                description = LocalStrings.current["renderer.show_gpuwatch_desc"].ifEmpty { "Adds an Open GPUWatch button on the main screen. Samsung devices only." },
-                checked = showGpuWatchButton,
-                onCheckedChange = { performHaptic(); onShowGpuWatchButtonChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                accentBorder = true
-            )
-        }
+        )
     }
 }
 
@@ -570,45 +588,43 @@ fun MatrixSettingsPanel(
         oledMode = oledMode, colors = colors
     ) { _ ->
         CleanTitle(
-            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX SETTINGS" },
+            text     = LocalStrings.current["particles.matrix_settings_title"].ifEmpty { "MATRIX\nSETTINGS" },
             fontSize = if (isLandscape) ts.displaySmall else ts.displayMedium,
             colors   = colors
         )
 
         val navAlpha by animateFloatAsState(
-            targetValue   = if (particlesEnabled) 1f else 0.38f,
+            targetValue   = if (particlesEnabled) 1f else 0.50f,
             animationSpec = tween(280, easing = MotionTokens.Easing.silk),
             label         = "ms_nav_alpha"
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
-                SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.glyph_settings"].ifEmpty { "GLYPH SETTINGS" },
-                    description = LocalStrings.current["matrix.appearance_desc"].ifEmpty {
-                        "Glyph font size and background opacity"
-                    },
-                    onClick       = { if (particlesEnabled) { performHaptic(); onAppearanceClick() } },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode,
-                    enabled       = particlesEnabled
-                )
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2, enabled = particlesEnabled) {
+                    Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["particles.glyph_settings_card_title"].ifEmpty { "GLYPH SETTINGS" },
+                            description = LocalStrings.current["matrix.appearance_desc"].ifEmpty { "Glyph font size and background opacity" },
+                            onClick = { if (particlesEnabled) { performHaptic(); onAppearanceClick() } },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesEnabled
+                        )
+                    }
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2, enabled = particlesEnabled) {
+                    Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
+                        SettingsNavigationCard(
+                            title = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
+                            description = LocalStrings.current["matrix.motion_desc"].ifEmpty { "Fall speed, column density, and trail fade length" },
+                            onClick = { if (particlesEnabled) { performHaptic(); onMotionClick() } },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode, enabled = particlesEnabled
+                        )
+                    }
+                }
             }
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2, enabled = particlesEnabled) {
-            Box(modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = navAlpha)) {
-                SettingsNavigationCard(
-                    title       = LocalStrings.current["particles.motion_title"].ifEmpty { "MOTION" },
-                    description = LocalStrings.current["matrix.motion_desc"].ifEmpty {
-                        "Fall speed, column density, and trail fade length"
-                    },
-                    onClick       = { if (particlesEnabled) { performHaptic(); onMotionClick() } },
-                    isSmallScreen = isSmallScreen, colors = colors,
-                    cardBackground = cardBackground, oledMode = oledMode,
-                    enabled       = particlesEnabled
-                )
-            }
-        }
+        ))
     }
 }
 
@@ -647,9 +663,13 @@ fun MatrixAppearancePanel(
 
         // ── Glyph size ────────────────────────────────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 1, enabled = enabled) {
-            val alpha by animateFloatAsState(if (enabled) 1f else 0.38f, tween(260, easing = MotionTokens.Easing.velvet), label = "ma_font_a")
+            val cardAlpha by animateFloatAsState(1f, tween(260, easing = MotionTokens.Easing.velvet), label = "ma_font_a")
             Box(
-                modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = alpha)
+                modifier = Modifier.fillMaxWidth().graphicsLayer {
+                    alpha = cardAlpha
+                    scaleX = if (enabled) 1f else 0.90f
+                    scaleY = if (enabled) 1f else 0.90f
+                }
                     .then(if (enabled) Modifier.border(
                         width = 1.dp,
                         color = colors.primaryAccent.copy(alpha = 0.55f),
@@ -681,8 +701,10 @@ fun MatrixAppearancePanel(
                         )
                     }
                 }
+                DisabledCardWash(enabled, oledMode)
             }
         }
+
     }
 }
 
@@ -725,9 +747,13 @@ fun MatrixMotionPanel(
 
         // ── Speed ─────────────────────────────────────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4, enabled = enabled) {
-            val alpha by animateFloatAsState(if (enabled) 1f else 0.38f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_speed_a")
+            val cardAlpha by animateFloatAsState(1f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_speed_a")
             Box(
-                modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = alpha)
+                modifier = Modifier.fillMaxWidth().graphicsLayer {
+                    alpha = cardAlpha
+                    scaleX = if (enabled) 1f else 0.90f
+                    scaleY = if (enabled) 1f else 0.90f
+                }
                     .then(if (enabled) Modifier.border(
                         width = 1.dp,
                         color = colors.primaryAccent.copy(alpha = 0.55f),
@@ -759,14 +785,19 @@ fun MatrixMotionPanel(
                         )
                     }
                 }
+                DisabledCardWash(enabled, oledMode)
             }
         }
 
         // ── Density ───────────────────────────────────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4, enabled = enabled) {
-            val alpha by animateFloatAsState(if (enabled) 1f else 0.38f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_den_a")
+            val cardAlpha by animateFloatAsState(1f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_den_a")
             Box(
-                modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = alpha)
+                modifier = Modifier.fillMaxWidth().graphicsLayer {
+                    alpha = cardAlpha
+                    scaleX = if (enabled) 1f else 0.90f
+                    scaleY = if (enabled) 1f else 0.90f
+                }
                     .then(if (enabled) Modifier.border(
                         width = 1.dp,
                         color = colors.primaryAccent.copy(alpha = 0.55f),
@@ -798,14 +829,19 @@ fun MatrixMotionPanel(
                         )
                     }
                 }
+                DisabledCardWash(enabled, oledMode)
             }
         }
 
         // ── Trail length ──────────────────────────────────────────────────────
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = enabled) {
-            val alpha by animateFloatAsState(if (enabled) 1f else 0.38f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_trail_a")
+            val cardAlpha by animateFloatAsState(1f, tween(260, easing = MotionTokens.Easing.velvet), label = "mm_trail_a")
             Box(
-                modifier = Modifier.fillMaxWidth().graphicsLayer(alpha = alpha)
+                modifier = Modifier.fillMaxWidth().graphicsLayer {
+                    alpha = cardAlpha
+                    scaleX = if (enabled) 1f else 0.90f
+                    scaleY = if (enabled) 1f else 0.90f
+                }
                     .then(if (enabled) Modifier.border(
                         width = 1.dp,
                         color = colors.primaryAccent.copy(alpha = 0.55f),
@@ -837,6 +873,7 @@ fun MatrixMotionPanel(
                         )
                     }
                 }
+                DisabledCardWash(enabled, oledMode)
             }
         }
     }

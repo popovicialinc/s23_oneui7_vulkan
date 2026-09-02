@@ -460,6 +460,7 @@ fun CleanTitle(
     reverseGradient: Boolean = false,
     scrollState: androidx.compose.foundation.ScrollState? = null
 ) {
+    val panelScrollState = scrollState ?: LocalPanelScrollState.current
     val titleColor = colors.textPrimary
     val animationLevel = LocalAnimationLevel.current
     val animSpeed = LocalAnimationSpeed.current
@@ -507,7 +508,7 @@ fun CleanTitle(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
-                translationY = -(scrollState?.value ?: 0) * 0.4f
+                translationY = -(panelScrollState?.value ?: 0) * 0.4f
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center

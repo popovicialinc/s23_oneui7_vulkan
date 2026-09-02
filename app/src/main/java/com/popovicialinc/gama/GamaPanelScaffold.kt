@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -66,6 +65,42 @@ import kotlin.math.roundToInt
 internal fun tr(key: String, fallback: String): String =
     LocalStrings.current[key].ifEmpty { fallback }
 
+/**
+ * Keeps settings cards readable in portrait while using the unused horizontal
+ * space in landscape. Each card is measured within one equal-width column, so
+ * text reflows instead of shrinking or leaving a single oversized row.
+ */
+@Composable
+internal fun ResponsiveSettingsCardGrid(
+    isLandscape: Boolean,
+    cards: List<@Composable () -> Unit>
+) {
+    if (!isLandscape) {
+        cards.forEach { it() }
+        return
+    }
+
+    CompositionLocalProvider(LocalLandscapePanelGrid provides false) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        cards.chunked(2).forEach { rowCards ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                rowCards.forEach { card ->
+                    Box(modifier = Modifier.weight(1f)) { card() }
+                }
+                if (rowCards.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+    }
+}
+
 @Composable
 internal fun PanelScaffold(
     visible: Boolean,
@@ -76,7 +111,7 @@ internal fun PanelScaffold(
     oledMode: Boolean = false,
     rootExitCascade: Boolean = false,
     colors: ThemeColors,
-    leadingFloatingButton: (@Composable (Modifier) -> Unit)? = null,
+    leadingFloatingButton: (@Composable (Modifier, FloatingButtonHoldState, Boolean) -> Unit)? = null,
     edgeSpacers: Boolean = true,
     reserveBackButtonSpace: Boolean = true,
     contentAvoidsBackButton: Boolean = true,
@@ -89,6 +124,7 @@ internal fun PanelScaffold(
     val animLevel = LocalAnimationLevel.current
     val animSpeed = LocalAnimationSpeed.current
     val backButtonInversed = LocalBackButtonInversed.current
+    val floatingButtonAnchors = LocalFloatingButtonAnchors.current
 
     // Floating panel chrome should use the same visual language as the cards:
     // fade + slight zoom + tiny vertical lift.
@@ -187,11 +223,14 @@ internal fun PanelScaffold(
                 )
 
                 val backButtonSize = if (isSmallScreen) 48.dp else 52.dp
-                val horizontalPadding = if (isLandscape) 32.dp else 24.dp
+                // Landscape keeps a symmetric safe gutter on both sides. This
+                // preserves the concentric card frame and prevents either floating
+                // control (back, search, or global) from covering card content.
+                val horizontalPadding = if (isLandscape) backButtonSize + 48.dp else 24.dp
 
                 CompositionLocalProvider(
                     LocalFloatingBackButtonAvoidance provides FloatingBackButtonAvoidance(
-                        enabled = visible && !isLandscape && contentAvoidsBackButton && LocalBackButtonAvoidanceEnabled.current,
+                        enabled = visible && contentAvoidsBackButton && LocalBackButtonAvoidanceEnabled.current,
                         endPadding = backButtonSize + 32.dp,
                         bottomPadding = if (isSmallScreen) 44.dp else 52.dp,
                         buttonSize = backButtonSize
@@ -199,6 +238,7 @@ internal fun PanelScaffold(
                 ) {
                     Column(
                         modifier = Modifier
+                            .fillMaxWidth()
                             .widthIn(max = if (isLandscape) 800.dp else 500.dp)
                             .then(
                                 if (contentScrollable) Modifier.verticalScroll(scrollState)
@@ -213,18 +253,13 @@ internal fun PanelScaffold(
                         verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 16.dp else 20.dp)
                     ) {
                         if (edgeSpacers) Spacer(modifier = Modifier.height(if (isLandscape) 24.dp else 40.dp))
-                        content(scrollState)
+                        CompositionLocalProvider(LocalPanelScrollState provides scrollState) {
+                            content(scrollState)
+                        }
                         if (edgeSpacers) Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
 
-                val floatingBottomPadding = if (isSmallScreen) 18.dp else 24.dp
-                // Match the main ":" button anchor exactly.
-                // The floating buttons draw a 1.8x glow wrapper, so anchoring by the
-                // raw button size made "<" sit closer to the edge than ":".
-                val floatingGlowSize = backButtonSize * 1.8f
-                val floatingRestX = maxWidth / 2f - 16.dp - floatingGlowSize / 2f
-                val floatingOffscreenX = maxWidth / 2f + floatingGlowSize
                 var floatingChromeVisible by remember { mutableStateOf(visible) }
                 LaunchedEffect(visible, animLevel) {
                     if (visible) {
@@ -249,57 +284,39 @@ internal fun PanelScaffold(
                 val floatingChromeScale = 0.94f + floatingChromeProgress * 0.06f
                 val floatingChromeTranslationY = (1f - floatingChromeProgress) * floatingChromeOffsetYPx
 
-                fun sideOffset(sideProgress: Float): Dp {
-                    val direction = if (sideProgress < 0f) -1f else 1f
-                    return if (kotlin.math.abs(sideProgress) <= 1f) {
-                        floatingRestX * sideProgress
+                fun anchorModifier(isLeft: Boolean): Modifier {
+                    // PanelBackButton and the leading controls measure to their glow,
+                    // not their visible 52dp circle. Centre that shared footprint on
+                    // the saved anchor so every control truly lands at the same point.
+                    val glowSize = backButtonSize * 1.8f
+                    val x = if (floatingButtonAnchors.fullWidth) {
+                        maxWidth * if (isLeft) floatingButtonAnchors.leftX else floatingButtonAnchors.rightX
+                    } else if (isLeft) {
+                        maxWidth * 0.5f * floatingButtonAnchors.leftX
                     } else {
-                        floatingOffscreenX * direction
+                        maxWidth * (0.5f + 0.5f * floatingButtonAnchors.rightX)
                     }
+                    val y = maxHeight * if (isLeft) floatingButtonAnchors.leftY else floatingButtonAnchors.rightY
+                    return Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = x - glowSize / 2, y = y - glowSize / 2)
                 }
 
-                val backSideProgress = remember { Animatable(if (backButtonInversed) -1f else 1f) }
-                val leadingSideProgress = remember { Animatable(if (backButtonInversed) 1f else -1f) }
-
-                LaunchedEffect(backButtonInversed, maxWidth) {
-                    val target = if (backButtonInversed) -1f else 1f
-                    val currentDirection = if (backSideProgress.value < 0f) -1f else 1f
-                    if (currentDirection != target) {
-                        val leaveSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(150, animSpeed), easing = MotionTokens.Easing.exit)
-                        val enterSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
-                        backSideProgress.animateTo(currentDirection * 1.35f, leaveSpec)
-                        backSideProgress.snapTo(-currentDirection * 1.35f)
-                        backSideProgress.animateTo(target, enterSpec)
-                    } else {
-                        backSideProgress.animateTo(target, tween(durationMillis = MotionTokens.SpeedUtil.durationMs(220, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate))
-                    }
-                }
-
-                LaunchedEffect(backButtonInversed, maxWidth) {
-                    val target = if (backButtonInversed) 1f else -1f
-                    val currentDirection = if (leadingSideProgress.value < 0f) -1f else 1f
-                    if (currentDirection != target) {
-                        val leaveSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(150, animSpeed), easing = MotionTokens.Easing.exit)
-                        val enterSpec = tween<Float>(durationMillis = MotionTokens.SpeedUtil.durationMs(260, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate)
-                        leadingSideProgress.animateTo(currentDirection * 1.35f, leaveSpec)
-                        leadingSideProgress.snapTo(-currentDirection * 1.35f)
-                        leadingSideProgress.animateTo(target, enterSpec)
-                    } else {
-                        leadingSideProgress.animateTo(target, tween(durationMillis = MotionTokens.SpeedUtil.durationMs(220, animSpeed), easing = MotionTokens.Easing.emphasizedDecelerate))
-                    }
-                }
+                val leadingHoldState = remember { FloatingButtonHoldState() }
+                val backHoldState = remember { FloatingButtonHoldState() }
 
                 leadingFloatingButton?.invoke(
                     Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = floatingBottomPadding)
-                        .offset(x = sideOffset(leadingSideProgress.value))
+                        .then(anchorModifier(!backButtonInversed))
                         .graphicsLayer(
                             alpha = floatingChromeProgress,
                             scaleX = floatingChromeScale,
                             scaleY = floatingChromeScale,
-                            translationY = floatingChromeTranslationY
-                        )
+                            translationX = leadingHoldState.dragTranslationX,
+                            translationY = floatingChromeTranslationY + leadingHoldState.dragTranslationY
+                        ),
+                    leadingHoldState,
+                    !backButtonInversed
                 )
 
                 PanelBackButton(
@@ -309,15 +326,16 @@ internal fun PanelScaffold(
                     isSmallScreen = isSmallScreen,
                     enabled = visible,
                     scrollState = scrollState,
+                    floatingHoldState = backHoldState,
+                    isLeftSide = backButtonInversed,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = floatingBottomPadding)
-                        .offset(x = sideOffset(backSideProgress.value))
+                        .then(anchorModifier(backButtonInversed))
                         .graphicsLayer(
                             alpha = floatingChromeProgress,
                             scaleX = floatingChromeScale,
                             scaleY = floatingChromeScale,
-                            translationY = floatingChromeTranslationY
+                            translationX = backHoldState.dragTranslationX,
+                            translationY = floatingChromeTranslationY + backHoldState.dragTranslationY
                         )
                 )
             }

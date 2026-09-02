@@ -42,6 +42,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -649,6 +650,18 @@ fun GamaUI(
         )
     }
     var backButtonInversed by remember { mutableStateOf(prefs.getBoolean("back_button_inversed", false)) }
+    var floatingLeftX by remember { mutableStateOf(prefs.getFloat("floating_left_x", 0.30f).coerceIn(0.16f, 0.84f)) }
+    var floatingLeftY by remember { mutableStateOf(prefs.getFloat("floating_left_y", 0.94f).coerceIn(0.50f, 0.96f)) }
+    var floatingRightX by remember { mutableStateOf(prefs.getFloat("floating_right_x", 0.70f).coerceIn(0.16f, 0.84f)) }
+    var floatingRightY by remember { mutableStateOf(prefs.getFloat("floating_right_y", 0.94f).coerceIn(0.50f, 0.96f)) }
+    var landscapeFloatingLeftX by remember { mutableStateOf(prefs.getFloat("landscape_floating_left_x", 0.12f).coerceIn(0.04f, 0.96f)) }
+    var landscapeFloatingLeftY by remember { mutableStateOf(prefs.getFloat("landscape_floating_left_y", 0.88f).coerceIn(0.50f, 0.96f)) }
+    var landscapeFloatingRightX by remember { mutableStateOf(prefs.getFloat("landscape_floating_right_x", 0.88f).coerceIn(0.04f, 0.96f)) }
+    var landscapeFloatingRightY by remember { mutableStateOf(prefs.getFloat("landscape_floating_right_y", 0.88f).coerceIn(0.50f, 0.96f)) }
+    var settingsButtonX by remember { mutableStateOf(prefs.getFloat("settings_button_x", 0.84f).coerceIn(0.16f, 0.84f)) }
+    var settingsButtonY by remember { mutableStateOf(prefs.getFloat("settings_button_y", 0.94f).coerceIn(0.50f, 0.96f)) }
+    var landscapeSettingsButtonX by remember { mutableStateOf(prefs.getFloat("landscape_settings_button_x", 0.06f).coerceIn(0.04f, 0.96f)) }
+    var landscapeSettingsButtonY by remember { mutableStateOf(prefs.getFloat("landscape_settings_button_y", 0.94f).coerceIn(0.50f, 0.96f)) }
     var shadowsEnabled by remember { mutableStateOf(prefs.getBoolean("shadows_enabled", true)) }
     var hapticsEnabled by remember {
         mutableStateOf(
@@ -1091,6 +1104,18 @@ fun GamaUI(
         val snapStagger = staggerEnabled
         val snapBackButtonAvoidance = backButtonAvoidanceEnabled
         val snapBackButtonInversed = backButtonInversed
+        val snapFloatingLeftX = floatingLeftX
+        val snapFloatingLeftY = floatingLeftY
+        val snapFloatingRightX = floatingRightX
+        val snapFloatingRightY = floatingRightY
+        val snapLandscapeFloatingLeftX = landscapeFloatingLeftX
+        val snapLandscapeFloatingLeftY = landscapeFloatingLeftY
+        val snapLandscapeFloatingRightX = landscapeFloatingRightX
+        val snapLandscapeFloatingRightY = landscapeFloatingRightY
+        val snapSettingsButtonX = settingsButtonX
+        val snapSettingsButtonY = settingsButtonY
+        val snapLandscapeSettingsButtonX = landscapeSettingsButtonX
+        val snapLandscapeSettingsButtonY = landscapeSettingsButtonY
         val snapShadows = shadowsEnabled
         val snapHapticsEnabled = hapticsEnabled
         val snapHapticsRegularEnabled = hapticsRegularEnabled
@@ -1151,6 +1176,18 @@ fun GamaUI(
                 putBoolean("stagger_enabled", snapStagger)
                 putBoolean("back_button_avoidance_enabled", snapBackButtonAvoidance)
                 putBoolean("back_button_inversed", snapBackButtonInversed)
+                putFloat("floating_left_x", snapFloatingLeftX)
+                putFloat("floating_left_y", snapFloatingLeftY)
+                putFloat("floating_right_x", snapFloatingRightX)
+                putFloat("floating_right_y", snapFloatingRightY)
+                putFloat("landscape_floating_left_x", snapLandscapeFloatingLeftX)
+                putFloat("landscape_floating_left_y", snapLandscapeFloatingLeftY)
+                putFloat("landscape_floating_right_x", snapLandscapeFloatingRightX)
+                putFloat("landscape_floating_right_y", snapLandscapeFloatingRightY)
+                putFloat("settings_button_x", snapSettingsButtonX)
+                putFloat("settings_button_y", snapSettingsButtonY)
+                putFloat("landscape_settings_button_x", snapLandscapeSettingsButtonX)
+                putFloat("landscape_settings_button_y", snapLandscapeSettingsButtonY)
                 putBoolean("shadows_enabled", snapShadows)
                 putBoolean(GamaHaptics.PREF_ENABLED, snapHapticsEnabled)
                 putBoolean(GamaHaptics.PREF_REGULAR_ENABLED, snapHapticsRegularEnabled)
@@ -1516,6 +1553,10 @@ fun GamaUI(
 
     // Adaptive type scale — computed once here, available everywhere via LocalTypeScale
     val typeScale = rememberAdaptiveType()
+    val floatingButtonLivePositions = remember { FloatingButtonLivePositions() }
+    LaunchedEffect(isLandscape) {
+        floatingButtonLivePositions.clearAll()
+    }
 
     // Provide the scaled density to the entire app
     val currentDensity = LocalDensity.current
@@ -1528,6 +1569,55 @@ fun GamaUI(
         LocalStaggerEnabled provides staggerEnabled,
         LocalBackButtonAvoidanceEnabled provides backButtonAvoidanceEnabled,
         LocalBackButtonInversed provides backButtonInversed,
+        LocalFloatingButtonAnchors provides if (isLandscape) FloatingButtonAnchors(
+            leftX = landscapeFloatingLeftX, leftY = landscapeFloatingLeftY,
+            rightX = landscapeFloatingRightX, rightY = landscapeFloatingRightY,
+            fullWidth = true
+        ) else FloatingButtonAnchors(
+            leftX = floatingLeftX, leftY = floatingLeftY,
+            rightX = floatingRightX, rightY = floatingRightY
+        ),
+        LocalFloatingButtonPositionController provides FloatingButtonPositionController(
+            leftX = if (isLandscape) landscapeFloatingLeftX else floatingLeftX,
+            leftY = if (isLandscape) landscapeFloatingLeftY else floatingLeftY,
+            rightX = if (isLandscape) landscapeFloatingRightX else floatingRightX,
+            rightY = if (isLandscape) landscapeFloatingRightY else floatingRightY,
+            fullWidth = isLandscape,
+            settingsX = if (isLandscape) landscapeSettingsButtonX else settingsButtonX,
+            settingsY = if (isLandscape) landscapeSettingsButtonY else settingsButtonY,
+            settingsFullWidth = isLandscape,
+            livePositions = floatingButtonLivePositions,
+            onLeftMove = { x, y ->
+                if (isLandscape) {
+                    landscapeFloatingLeftX = x.coerceIn(0.04f, 0.96f)
+                    landscapeFloatingLeftY = y.coerceIn(0.50f, 0.96f)
+                } else {
+                    floatingLeftX = x.coerceIn(0.16f, 0.84f)
+                    floatingLeftY = y.coerceIn(0.50f, 0.96f)
+                }
+                savePreferencesDebounced()
+            },
+            onRightMove = { x, y ->
+                if (isLandscape) {
+                    landscapeFloatingRightX = x.coerceIn(0.04f, 0.96f)
+                    landscapeFloatingRightY = y.coerceIn(0.50f, 0.96f)
+                } else {
+                    floatingRightX = x.coerceIn(0.16f, 0.84f)
+                    floatingRightY = y.coerceIn(0.50f, 0.96f)
+                }
+                savePreferencesDebounced()
+            },
+            onSettingsMove = { x, y ->
+                if (isLandscape) {
+                    landscapeSettingsButtonX = x.coerceIn(0.04f, 0.96f)
+                    landscapeSettingsButtonY = y.coerceIn(0.50f, 0.96f)
+                } else {
+                    settingsButtonX = x.coerceIn(0.16f, 0.84f)
+                    settingsButtonY = y.coerceIn(0.50f, 0.96f)
+                }
+                savePreferencesDebounced()
+            }
+        ),
         LocalShadowsEnabled provides (shadowsEnabled && !effectiveOledMode),
         LocalTypeScale provides typeScale,
         LocalDensity provides Density(
@@ -1894,7 +1984,11 @@ fun GamaUI(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .weight(1f)
-                                        .padding(start = 0.dp, top = lsVPad, end = lsHPad, bottom = lsVPad),
+                                        // Keep the right menu concentric inside its
+                                        // half: the old zero start inset made the
+                                        // shell touch the center seam while leaving
+                                        // a larger outer gutter on the right.
+                                        .padding(horizontal = lsHPad, vertical = lsVPad),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AnimatedElement(
@@ -1902,11 +1996,13 @@ fun GamaUI(
                                         totalItems = 8, enabled = shizukuRunning && shizukuPermissionGranted
                                     ) {
                                         val lsShizukuReady = shizukuRunning && shizukuPermissionGranted
+                                        val lsShellInset = 16.dp
+                                        val lsShellRadius = 44.dp
 
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(44.dp))
+                                                .clip(RoundedCornerShape(lsShellRadius))
                                                 .drawWithContent {
                                                     val edgeDepth = 30.dp.toPx()
                                                     val sideDepth = 24.dp.toPx()
@@ -1970,7 +2066,7 @@ fun GamaUI(
 
                                                     val outlineWidth = 1.dp.toPx()
                                                     val inset = outlineWidth / 2f
-                                                    val radius = 44.dp.toPx() - inset
+                                                    val radius = lsShellRadius.toPx() - inset
                                                     drawRoundRect(
                                                         color = colors.primaryAccent.copy(alpha = 0.44f),
                                                         topLeft = Offset(inset, inset),
@@ -1985,8 +2081,12 @@ fun GamaUI(
                                         ) {
                                             // Transparent card — no blur, no frosted backdrop.
                                             // Sharp content layer
+                                            // The renderer card, two renderer choices, and Resources must all
+                                            // fit in short landscape windows at Android's largest display zoom.
                                             Column(
-                                                modifier = Modifier.padding(16.dp),
+                                                // The inner 28dp cards sit in a 44dp shell: the
+                                                // shared 16dp difference is the same on every edge.
+                                                modifier = Modifier.padding(lsShellInset),
                                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                                             ) {
                                                 RendererCard(
@@ -2600,7 +2700,11 @@ fun GamaUI(
                                                         }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
-                                                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                                                    // In landscape, square buttons grow with width. At large
+                                                    // Android display-zoom values that pushes the utility row
+                                                    // outside the panel and it gets clipped. BigRendererButton
+                                                    // already provides a responsive, bounded height.
+                                                    modifier = Modifier.weight(1f),
                                                     isSelected = currentRenderer == "Vulkan",
                                                     forceHighlight = true,
                                                     enabled = shizukuReady || rootAvailable,
@@ -2635,7 +2739,7 @@ fun GamaUI(
                                                         }
                                                         openMainPanelExclusive { showWarningDialog = true }
                                                     },
-                                                    modifier = Modifier.weight(1f).aspectRatio(1f),
+                                                    modifier = Modifier.weight(1f),
                                                     isSelected = false,
                                                     enabled = shizukuReady || rootAvailable,
                                                     colors = colors,
@@ -3411,6 +3515,22 @@ fun GamaUI(
                     backButtonInversed = enabled
                     savePreferences()
                 },
+                onResetFloatingButtonPositions = {
+                    floatingButtonLivePositions.clearAll()
+                    floatingLeftX = 0.30f
+                    floatingLeftY = 0.94f
+                    floatingRightX = 0.70f
+                    floatingRightY = 0.94f
+                    landscapeFloatingLeftX = 0.12f
+                    landscapeFloatingLeftY = 0.88f
+                    landscapeFloatingRightX = 0.88f
+                    landscapeFloatingRightY = 0.88f
+                    settingsButtonX = 0.84f
+                    settingsButtonY = 0.94f
+                    landscapeSettingsButtonX = 0.06f
+                    landscapeSettingsButtonY = 0.94f
+                    savePreferences()
+                },
                 onNotificationsClick = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showNotifications = true
@@ -3637,8 +3757,6 @@ fun GamaUI(
                 onDismiss = {
                     performHaptic(HapticFeedbackConstants.CONTEXT_CLICK)
                     showIntegrationInfoDialog = false
-                    integrationInfoCopyText = null
-                    integrationInfoGuideUrl = null
                 },
                 isSmallScreen = isSmallScreen,
                 isLandscape = isLandscape,
@@ -4166,18 +4284,39 @@ fun GamaUI(
             )
 
             if (controlsVisible || controlsAlpha > 0f) {
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(bottom = if (isSmallScreen) 20.dp else 30.dp, start = 20.dp, end = 20.dp)
                         .alpha(controlsAlpha)
                 ) {
+                    val floatingButtonController = LocalFloatingButtonPositionController.current
+                    val settingsButtonSize = if (isSmallScreen) 48.dp else 52.dp
+                    val settingsGlowSize = settingsButtonSize * 1.8f
+                    val settingsAnchorX = maxWidth * if (floatingButtonController.settingsFullWidth) {
+                        floatingButtonController.settingsX
+                    } else {
+                        0.5f + 0.5f * floatingButtonController.settingsX
+                    } - settingsGlowSize / 2
+                    val settingsAnchorY = maxHeight * floatingButtonController.settingsY - settingsGlowSize / 2
                     // Version number
                     AnimatedElement(
                         visible = controlsVisible, staggerIndex = 4,
                         totalItems = 8,
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
+                            .align(
+                                if (isLandscape) Alignment.CenterStart else Alignment.BottomCenter
+                            )
+                            .then(
+                                if (isLandscape) {
+                                    Modifier
+                                        .fillMaxWidth(0.5f)
+                                        .wrapContentWidth(Alignment.CenterHorizontally)
+                                        .zIndex(2f)
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .graphicsLayer(
                                 scaleX = controlsScale,
                                 scaleY = controlsScale
@@ -4192,21 +4331,18 @@ fun GamaUI(
                         )
                     }
 
-                    // Settings button (bottom-end). This is the source-of-truth anchor.
-                    // Panel back/search/global buttons mirror this exact resting position.
                     AnimatedElement(
                         visible = controlsVisible, staggerIndex = 4,
                         totalItems = 8,
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = if (isSmallScreen) 18.dp else 24.dp)
-                            .offset(x = 20.dp, y = if (isSmallScreen) 20.dp else 30.dp)
+                            .align(Alignment.TopStart)
+                            .offset(x = settingsAnchorX, y = settingsAnchorY)
                             .graphicsLayer(
                                 scaleX = controlsScale,
                                 scaleY = controlsScale
                             )
                     ) {
-                        val btnSize = if (isSmallScreen) 48.dp else 52.dp
+                        val btnSize = settingsButtonSize
                         val iconSize = if (isSmallScreen) 24.dp else 28.dp
 
 
@@ -4215,6 +4351,7 @@ fun GamaUI(
                         // caused a recomposition every frame on the idle main screen.
                         val settingsGlowAlpha = 0.25f
                         var settingsPressed by remember { mutableStateOf(false) }
+                        val settingsHoldState = remember { FloatingButtonHoldState() }
                         val animationLevel = LocalAnimationLevel.current
                         // ── Single Animatable replaces 3 separate animators ───
                         val settingsPressProgress = remember { Animatable(0f) }
@@ -4249,7 +4386,13 @@ fun GamaUI(
                         val settingsBorderWidth = (1.5f + spp * 0.5f).dp
                         val glowSize = btnSize * 1.8f
 
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier.graphicsLayer(
+                                translationX = settingsHoldState.dragTranslationX,
+                                translationY = settingsHoldState.dragTranslationY
+                            ),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
 
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(glowSize)) {
                                 // Static glow blob — blur radius is fixed so GPU sets RenderEffect once.
@@ -4285,6 +4428,7 @@ fun GamaUI(
                                             )
                                     )
                                 }
+                                FloatingHoldIndicator(settingsHoldState, colors.primaryAccent, glowSize)
                                 Box(
                                     modifier = Modifier
                                         .size(btnSize)
@@ -4312,26 +4456,13 @@ fun GamaUI(
                                             RoundedCornerShape(28.dp)
                                         )
                                         .semantics { contentDescription = "Open Settings" }
-                                        .then(
-                                            if (controlsVisible) Modifier.pointerInput(controlsVisible) {
-                                                detectTapGestures(
-                                                    onPress = {
-                                                        val hapticStartedAt = GamaHaptics.pressStart(context, view)
-                                                        settingsPressed = true
-                                                        val released = tryAwaitRelease()
-                                                        settingsPressed = false
-                                                        GamaHaptics.releaseAfterPress(
-                                                            context,
-                                                            view,
-                                                            hapticStartedAt,
-                                                            released
-                                                        )
-                                                        if (released) {
-                                                            openMainPanelExclusive { showSettings = true }
-                                                        }
-                                                    }
-                                                )
-                                            } else Modifier
+                                        .floatingButtonGesture(
+                                            enabled = controlsVisible,
+                                            isLeftSide = false,
+                                            isSettingsButton = true,
+                                            holdState = settingsHoldState,
+                                            onPressedChange = { settingsPressed = it },
+                                            onClick = { openMainPanelExclusive { showSettings = true } }
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {

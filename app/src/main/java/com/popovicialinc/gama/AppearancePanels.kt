@@ -89,34 +89,23 @@ fun EffectsPanel(
     ) { _ ->
         CleanTitle(text = LocalStrings.current["effects.title"].ifEmpty { "EFFECTS" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["blur.blur_toggle"].ifEmpty { "BLUR" },
-                description = LocalStrings.current["blur.blur_toggle_desc"].ifEmpty { "Frosted glass behind panels and dialogs — subtle depth that makes the UI feel premium" },
-                checked = blurEnabled,
-                onCheckedChange = { performHaptic(); onBlurChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
-            ToggleCard(
-                title = LocalStrings.current["appearance.card_shadows"].ifEmpty { "CARD SHADOWS" },
-                description = LocalStrings.current["appearance.card_shadows_desc"].ifEmpty { "Drop shadows under cards — disable to reduce GPU load or fix visual glitches during animations" },
-                checked = shadowsEnabled && !oledMode,
-                onCheckedChange = { performHaptic(); onShadowsEnabledChange(it) },
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, oledMode = oledMode,
-                enabled = !oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
-            SettingsNavigationCard(
-                title = LocalStrings.current["particles.toggle"].ifEmpty { "PARTICLES" }, description = LocalStrings.current["particles.toggle_desc"].ifEmpty { "Gives the app a living feel" },
-                onClick = { performHaptic(); onParticlesClick() },
-                isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 4) {
+                    ToggleCard(title = LocalStrings.current["blur.blur_toggle"].ifEmpty { "BLUR" }, description = LocalStrings.current["blur.blur_toggle_desc"].ifEmpty { "Frosted glass behind panels and dialogs — subtle depth that makes the UI feel premium" }, checked = blurEnabled, onCheckedChange = { performHaptic(); onBlurChange(it) }, colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode)
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 4) {
+                    ToggleCard(title = LocalStrings.current["appearance.card_shadows"].ifEmpty { "CARD SHADOWS" }, description = LocalStrings.current["appearance.card_shadows_desc"].ifEmpty { "Drop shadows under cards — disable to reduce GPU load or fix visual glitches during animations" }, checked = shadowsEnabled && !oledMode, onCheckedChange = { performHaptic(); onShadowsEnabledChange(it) }, colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode, enabled = !oledMode)
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4) {
+                    SettingsNavigationCard(title = LocalStrings.current["particles.toggle"].ifEmpty { "PARTICLES" }, description = LocalStrings.current["particles.toggle_desc"].ifEmpty { "Gives the app a living feel" }, onClick = { performHaptic(); onParticlesClick() }, isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode)
+                }
+            }
+        ))
     }
 }
 
@@ -151,42 +140,22 @@ fun ColorCustomizationPanel(
     ) { _ ->
         CleanTitle(text = LocalStrings.current["colors.title"].ifEmpty { "COLORS" }, fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge, colors = colors)
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 3, enabled = dynamicColorAvailable) {
-            ToggleCard(
-                title = LocalStrings.current["colors.dynamic_color"].ifEmpty { "DYNAMIC COLOR" },
-                description = if (dynamicColorAvailable) LocalStrings.current["colors.dynamic_color_desc"].ifEmpty { "Picks accent colors from your wallpaper automatically via Material You — also colors the Matrix rain when active" } else LocalStrings.current["colors.dynamic_color_unavailable"].ifEmpty { "Requires Android 12 or newer" },
-                checked = useDynamicColor && dynamicColorAvailable,
-                onCheckedChange = { performHaptic(); onDynamicColorChange(it) },
-                colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen,
-                oledMode = oledMode, enabled = dynamicColorAvailable
-            )
-        }
-            AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3,
-                enabled = !useDynamicColor || !dynamicColorAvailable) {
-            ToggleCard(
-                title = LocalStrings.current["colors.advanced_picker"].ifEmpty { "HEX COLOR PICKER" },
-                description = LocalStrings.current["colors.advanced_picker_desc"].ifEmpty { "Adds a hex input field to the color pickers — type any color directly, e.g. #4895EF" },
-                checked = advancedColorPicker,
-                onCheckedChange = { performHaptic(); onAdvancedColorPickerChange(it) },
-                colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen,
-                oledMode = oledMode, enabled = !useDynamicColor || !dynamicColorAvailable
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 3,
-            enabled = !useDynamicColor || !dynamicColorAvailable) {
-            CompactColorPickerCard(
-                title = LocalStrings.current["colors.accent_color"].ifEmpty { "ACCENT COLOR" },
-                description = LocalStrings.current["colors.accent_color_desc"].ifEmpty { "The highlight color used on buttons, borders, and interactive elements." },
-                currentColor = customAccentColor,
-                onColorChange = onAccentColorChange,
-                colors = colors, cardBackground = cardBackground,
-                isSmallScreen = isSmallScreen, isLandscape = isLandscape,
-                advancedPicker = advancedColorPicker,
-                enabled = !useDynamicColor || !dynamicColorAvailable,
-                oledMode = oledMode,
-                filterExtremeForTheme = true,
-                isDarkTheme = oledMode
-            )
-        }
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 3, enabled = dynamicColorAvailable) {
+                    ToggleCard(title = LocalStrings.current["colors.dynamic_color"].ifEmpty { "DYNAMIC COLOR" }, description = if (dynamicColorAvailable) LocalStrings.current["colors.dynamic_color_desc"].ifEmpty { "Picks accent colors from your wallpaper automatically via Material You — also colors the Matrix rain when active" } else LocalStrings.current["colors.dynamic_color_unavailable"].ifEmpty { "Requires Android 12 or newer" }, checked = useDynamicColor && dynamicColorAvailable, onCheckedChange = { performHaptic(); onDynamicColorChange(it) }, colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode, enabled = dynamicColorAvailable)
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 3, enabled = !useDynamicColor || !dynamicColorAvailable) {
+                    ToggleCard(title = LocalStrings.current["colors.advanced_picker"].ifEmpty { "HEX COLOR PICKER" }, description = LocalStrings.current["colors.advanced_picker_desc"].ifEmpty { "Adds a hex input field to the color pickers — type any color directly, e.g. #4895EF" }, checked = advancedColorPicker, onCheckedChange = { performHaptic(); onAdvancedColorPickerChange(it) }, colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, oledMode = oledMode, enabled = !useDynamicColor || !dynamicColorAvailable)
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 3, enabled = !useDynamicColor || !dynamicColorAvailable) {
+                    CompactColorPickerCard(title = LocalStrings.current["colors.accent_color"].ifEmpty { "ACCENT COLOR" }, description = LocalStrings.current["colors.accent_color_desc"].ifEmpty { "The highlight color used on buttons, borders, and interactive elements." }, currentColor = customAccentColor, onColorChange = onAccentColorChange, colors = colors, cardBackground = cardBackground, isSmallScreen = isSmallScreen, isLandscape = isLandscape, advancedPicker = advancedColorPicker, enabled = !useDynamicColor || !dynamicColorAvailable, oledMode = oledMode, filterExtremeForTheme = true, isDarkTheme = oledMode)
+                }
+            }
+        ))
     }
 }

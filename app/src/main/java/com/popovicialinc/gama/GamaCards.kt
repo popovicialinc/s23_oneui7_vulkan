@@ -121,8 +121,8 @@ import kotlin.math.roundToInt
  * This ensures consistency across all disabled cards in the app.
  *
  * Standard disabled style:
- * - Scale: 0.85f (zoom-in effect)
- * - Alpha: 0.25f (transparency)
+ * - Scale: 0.90f (keeps the card legible)
+ * - A 50% theme-aware wash instead of transparency
  * - Smooth animated transitions
  *
  * @param enabled Whether the card is enabled (true) or disabled (false)
@@ -135,28 +135,35 @@ fun DisabledCardWrapper(
 ) {
     val animSpeed = LocalAnimationSpeed.current
     val disabledScale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.85f,
+        targetValue = if (enabled) 1f else 0.90f,
         animationSpec = spring(
             dampingRatio = 0.60f,
             stiffness = MotionTokens.SpeedUtil.stiffness(440f, animSpeed)
         ),
         label = "disabled_card_scale"
     )
-    val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.25f,
-        animationSpec = tween(
-            durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
-            easing = MotionTokens.Easing.emphasized
-        ),
-        label = "disabled_card_alpha"
-    )
-
     Box(
         modifier = Modifier
             .scale(disabledScale)
-            .alpha(alpha)
+            .then(if (!enabled) Modifier.pointerInput(enabled) { detectTapGestures { } } else Modifier)
     ) {
         content()
+        DisabledCardWash(enabled)
+    }
+}
+
+@Composable
+fun BoxScope.DisabledCardWash(enabled: Boolean, oledMode: Boolean = false) {
+    if (!enabled) {
+        Box(
+            modifier = Modifier
+                // This is an overlay, not a layout participant. fillMaxSize()
+                // adopts the parent's maximum constraints and can therefore
+                // make the parent card as tall as its available viewport.
+                .matchParentSize()
+                .clip(RoundedCornerShape(28.dp))
+                .background((if (oledMode || isSystemInDarkTheme()) Color.Black else Color.White).copy(alpha = 0.50f))
+        )
     }
 }
 
@@ -173,12 +180,13 @@ fun SettingsNavigationCard(
     modifier: Modifier = Modifier
 ) {
     val ts = LocalTypeScale.current
+    val landscapeGrid = LocalLandscapePanelGrid.current
     val context = LocalContext.current
     val view = LocalView.current
     val animSpeed = LocalAnimationSpeed.current
 
     val disabledScale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.85f,
+        targetValue = if (enabled) 1f else 0.90f,
         animationSpec = spring(
             dampingRatio = 0.60f,
             stiffness = MotionTokens.SpeedUtil.stiffness(440f, animSpeed)
@@ -186,7 +194,7 @@ fun SettingsNavigationCard(
         label = "settings_nav_disabled_scale"
     )
     val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.25f,
+        targetValue = 1f,
         animationSpec = tween(
             durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
             easing = MotionTokens.Easing.emphasized
@@ -227,11 +235,17 @@ fun SettingsNavigationCard(
     }
     val chevronColor =
         if (isPressed && enabled) colors.primaryAccent else colors.textSecondary.copy(alpha = chevronAlphaVal)
+    val titleColor = if (enabled) {
+        colors.primaryAccent.copy(alpha = 0.7f)
+    } else {
+        colors.textSecondary.copy(alpha = 0.72f)
+    }
+    val descriptionColor = colors.textSecondary.copy(alpha = if (enabled) 1f else 0.72f)
     val shape = RoundedCornerShape(28.dp)
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
+            .fillMaxWidth(if (landscapeGrid) 0.48f else 1f)
             .heightIn(min = if (LocalConfiguration.current.screenWidthDp.dp < 360.dp) 88.dp else 96.dp, max = 400.dp)
     ) {
         Box(
@@ -285,7 +299,7 @@ fun SettingsNavigationCard(
                 ) {
                     Text(
                         text = title,
-                        color = colors.primaryAccent.copy(alpha = 0.7f),
+                        color = titleColor,
                         fontSize = ts.labelLarge,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 2.sp,
@@ -317,7 +331,7 @@ fun SettingsNavigationCard(
                     ) { targetDescription ->
                         Text(
                             text = targetDescription,
-                            color = colors.textSecondary,
+                            color = descriptionColor,
                             fontSize = ts.bodyMedium,
                             fontFamily = quicksandFontFamily,
                             fontWeight = FontWeight.Bold,
@@ -394,6 +408,7 @@ fun MainContentCards(
         isTablet -> 500.dp
         else -> 600.dp // Allow wider on phones to fill 1/2 screen
     }
+    val landscape = LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
 
     val shizukuReady = shizukuRunning && shizukuPermissionGranted
 
@@ -429,7 +444,9 @@ fun MainContentCards(
         verticalArrangement = Arrangement.Center
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = if (landscape) 800.dp else maxWidth),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(cardSpacing)
         ) {
@@ -462,7 +479,7 @@ fun MainContentCards(
                 // Vulkan/OpenGL row: zoom out and dim when Shizuku is not ready,
                 // matching the REMINDERS card style (scale 0.85f, alpha 0.25f).
                 val rendererButtonScale by animateFloatAsState(
-                    targetValue = if (shizukuReady) 1f else 0.85f,
+                    targetValue = if (shizukuReady) 1f else 0.80f,
                     animationSpec = spring(
                         dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                         stiffness = MotionTokens.Springs.gentle.stiffness
@@ -470,7 +487,7 @@ fun MainContentCards(
                     label = "renderer_button_scale"
                 )
                 val rendererButtonAlpha by animateFloatAsState(
-                    targetValue = if (shizukuReady) 1f else 0.25f,
+                    targetValue = if (shizukuReady) 1f else 0.50f,
                     animationSpec = tween(durationMillis = 320, easing = MotionTokens.Easing.velvet),
                     label = "renderer_button_alpha"
                 )
@@ -614,10 +631,14 @@ fun RendererCard(
     val cardCorner = 28.dp
     val cardPadding = when {
         isSmallScreen -> 16.dp
-        isLandscape -> (screenMinDp * 0.040f).dp.coerceIn(16.dp, 22.dp)
+        isLandscape -> (screenMinDp * 0.030f).dp.coerceIn(10.dp, 16.dp)
         else -> (screenMinDp * 0.055f).dp.coerceIn(20.dp, 28.dp)
     }
-    val cardInnerSpacing = (screenMinDp * 0.024f).dp.coerceIn(9.dp, 15.dp)
+    val cardInnerSpacing = if (isLandscape) {
+        (screenMinDp * 0.018f).dp.coerceIn(5.dp, 9.dp)
+    } else {
+        (screenMinDp * 0.024f).dp.coerceIn(9.dp, 15.dp)
+    }
     val glowBlurRadius = (screenMinDp * 0.027f).dp.coerceIn(8.dp, 14.dp)
     val allowWholeCardGlow = oledMode
 
@@ -1028,9 +1049,10 @@ fun ToggleCard(
     content: (@Composable () -> Unit)? = null
 ) {
     val ts = LocalTypeScale.current
+    val landscapeGrid = LocalLandscapePanelGrid.current
     val animSpeed = LocalAnimationSpeed.current
     val scale by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.85f,
+        targetValue = if (enabled) 1f else 0.90f,
         animationSpec = spring(
             dampingRatio = 0.58f,
             stiffness = MotionTokens.SpeedUtil.stiffness(430f, animSpeed)
@@ -1039,7 +1061,7 @@ fun ToggleCard(
     )
 
     val alpha by animateFloatAsState(
-        targetValue = if (enabled) 1f else 0.25f,
+        targetValue = 1f,
         animationSpec = tween(
             durationMillis = MotionTokens.SpeedUtil.durationMs(360, animSpeed),
             easing = MotionTokens.Easing.emphasized
@@ -1104,7 +1126,11 @@ fun ToggleCard(
         ),
         label = "toggle_title_alpha"
     )
-    val titleColor = colors.primaryAccent.copy(alpha = titleAlpha)
+    val titleColor = if (enabled) {
+        colors.primaryAccent.copy(alpha = titleAlpha)
+    } else {
+        colors.textSecondary.copy(alpha = 0.72f)
+    }
 
     // Uniform card height — cards with a Switch tend to be taller than plain button-only
     // cards (like SettingsNavigationCard) because the Switch widget adds extra height.
@@ -1115,7 +1141,7 @@ fun ToggleCard(
     CompositionLocalProvider(LocalCardEnabled provides enabled) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(if (landscapeGrid) 0.48f else 1f)
                 .heightIn(min = cardMinHeight)
                 .graphicsLayer(
                     scaleX = scale,

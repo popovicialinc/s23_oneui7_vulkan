@@ -16,6 +16,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -73,6 +74,7 @@ fun SystemPanel(
     onDismissOnClickOutsideChange: (Boolean) -> Unit,
     backButtonInversed: Boolean,
     onBackButtonInversedChange: (Boolean) -> Unit,
+    onResetFloatingButtonPositions: () -> Unit,
     onNotificationsClick: () -> Unit,
     onBackupClick: () -> Unit,
     onCrashLogClick: () -> Unit,
@@ -100,51 +102,61 @@ fun SystemPanel(
 
         // Haptics belongs to the system/input feedback section and returns to
         // this panel when dismissed.
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 8) {
-            SettingsNavigationCard(
-                title = strings["settings.haptics"].ifEmpty { "HAPTICS" },
-                description = strings["settings.haptics_desc"].ifEmpty { "Vibration feedback patterns and strengths" },
-                onClick = { performHaptic(); onHapticsClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
+        ResponsiveSettingsCardGrid(
+            isLandscape = isLandscape,
+            cards = listOf(
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = strings["settings.haptics"].ifEmpty { "HAPTICS" },
+                            description = strings["settings.haptics_desc"].ifEmpty { "Vibration feedback patterns and strengths" },
+                            onClick = { performHaptic(); onHapticsClick() },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = strings["system.notifications"].ifEmpty { "NOTIFICATIONS" },
+                            description = strings["system.notifications_desc"].ifEmpty { "Reminder alerts if you've left OpenGL running longer than intended" },
+                            onClick = { performHaptic(); onNotificationsClick() },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = strings["system.backup"].ifEmpty { "BACKUP & RESTORE" },
+                            description = strings["system.backup_desc"].ifEmpty { "Export all settings to a file, or restore from a previous backup" },
+                            onClick = { performHaptic(); onBackupClick() },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = strings["settings.language"].ifEmpty { "LANGUAGE" },
+                            description = strings["settings.language_desc"].ifEmpty { "Change the display language used throughout the app" },
+                            onClick = { performHaptic(); onLanguageClick() },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                },
+                {
+                    AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 8) {
+                        SettingsNavigationCard(
+                            title = strings["system.crash_log"].ifEmpty { "LOGS" },
+                            description = strings["system.crash_log_desc"].ifEmpty { "View recent reports and copy details for troubleshooting" },
+                            onClick = { performHaptic(); onCrashLogClick() },
+                            isSmallScreen = isSmallScreen, colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                        )
+                    }
+                }
             )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 8) {
-            SettingsNavigationCard(
-                title = strings["system.notifications"].ifEmpty { "NOTIFICATIONS" },
-                description = strings["system.notifications_desc"].ifEmpty { "Reminder alerts if you've left OpenGL running longer than intended" },
-                onClick = { performHaptic(); onNotificationsClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 8) {
-            SettingsNavigationCard(
-                title = strings["system.backup"].ifEmpty { "BACKUP & RESTORE" },
-                description = strings["system.backup_desc"].ifEmpty { "Export all settings to a file, or restore from a previous backup" },
-                onClick = { performHaptic(); onBackupClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 8) {
-            SettingsNavigationCard(
-                title = strings["settings.language"].ifEmpty { "LANGUAGE" },
-                description = strings["settings.language_desc"].ifEmpty { "Change the display language used throughout the app" },
-                onClick = { performHaptic(); onLanguageClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 5, totalItems = 8) {
-            SettingsNavigationCard(
-                title = strings["system.crash_log"].ifEmpty { "LOGS" },
-                description = strings["system.crash_log_desc"].ifEmpty { "View recent reports and copy details for troubleshooting" },
-                onClick = { performHaptic(); onCrashLogClick() },
-                isSmallScreen = isSmallScreen, colors = colors,
-                cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
+        )
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 6, totalItems = 8) {
             ToggleCard(
                 title = LocalStrings.current["renderer.verbose_mode"].ifEmpty { "VERBOSE OUTPUT" },
@@ -208,6 +220,142 @@ fun SystemPanel(
                 }
             }
         }
+        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 8, totalItems = 8) {
+            Button(
+                onClick = { performHaptic(); onResetFloatingButtonPositions() },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primaryAccent.copy(alpha = 0.16f),
+                    contentColor = colors.primaryAccent
+                ),
+                border = BorderStroke(1.dp, colors.primaryAccent.copy(alpha = 0.55f))
+            ) {
+                Text(
+                    text = strings["system.reset_floating_buttons"].ifEmpty { "RESET FLOATING BUTTON POSITIONS" },
+                    fontFamily = quicksandFontFamily,
+                    fontSize = ts.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp
+                )
+            }
+        }
+    }
+}
+
+private enum class FloatingAnchorSide { LEFT, RIGHT }
+
+@Composable
+private fun FloatingButtonPositionCard(
+    leftX: Float,
+    leftY: Float,
+    rightX: Float,
+    rightY: Float,
+    onLeftPositionChange: (Float, Float) -> Unit,
+    onRightPositionChange: (Float, Float) -> Unit,
+    colors: ThemeColors,
+    cardBackground: Color,
+    oledMode: Boolean,
+    strings: GamaStrings,
+    typeScale: AdaptiveTypeScale
+) {
+    val density = LocalDensity.current
+    var activeSide by remember { mutableStateOf<FloatingAnchorSide?>(null) }
+    val shape = RoundedCornerShape(28.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth().border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), shape),
+        colors = CardDefaults.cardColors(containerColor = cardBackground),
+        shape = shape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = strings["system.floating_button_positions"].ifEmpty { "FLOATING BUTTON POSITIONS" },
+                fontSize = typeScale.labelLarge,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                fontFamily = quicksandFontFamily,
+                color = colors.primaryAccent.copy(alpha = 0.7f)
+            )
+            Text(
+                text = strings["system.floating_button_positions_desc"].ifEmpty {
+                    "Drag each anchor. Every floating control on that half of the screen uses its exact position."
+                },
+                fontSize = typeScale.bodySmall,
+                color = colors.textSecondary,
+                fontFamily = quicksandFontFamily,
+                fontWeight = FontWeight.Bold
+            )
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(164.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (oledMode) Color(0xFF080808) else colors.primaryAccent.copy(alpha = 0.08f))
+                    .border(1.dp, colors.primaryAccent.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                    .pointerInput(leftX, leftY, rightX, rightY) {
+                        detectDragGestures(
+                            onDragStart = { start ->
+                                val halfWidth = size.width / 2f
+                                val leftCenter = Offset(halfWidth * leftX, size.height * leftY)
+                                val rightCenter = Offset(halfWidth + halfWidth * rightX, size.height * rightY)
+                                val targetRadius = with(density) { 34.dp.toPx() }
+                                activeSide = when {
+                                    (start - leftCenter).getDistance() <= targetRadius -> FloatingAnchorSide.LEFT
+                                    (start - rightCenter).getDistance() <= targetRadius -> FloatingAnchorSide.RIGHT
+                                    else -> null
+                                }
+                            },
+                            onDragEnd = { activeSide = null },
+                            onDragCancel = { activeSide = null }
+                        ) { change, _ ->
+                            val side = activeSide ?: return@detectDragGestures
+                            val halfWidth = size.width / 2f
+                            val normalizedY = (change.position.y / size.height).coerceIn(0.08f, 0.92f)
+                            if (side == FloatingAnchorSide.LEFT) {
+                                onLeftPositionChange((change.position.x / halfWidth).coerceIn(0.16f, 0.84f), normalizedY)
+                            } else {
+                                onRightPositionChange(((change.position.x - halfWidth) / halfWidth).coerceIn(0.16f, 0.84f), normalizedY)
+                            }
+                        }
+                    }
+            ) {
+                Box(
+                    Modifier.align(Alignment.Center).fillMaxHeight().width(1.dp)
+                        .background(colors.primaryAccent.copy(alpha = 0.35f))
+                )
+                FloatingAnchorMarker(
+                    label = strings["system.floating_button_left"].ifEmpty { "LEFT" },
+                    x = maxWidth * 0.5f * leftX,
+                    y = maxHeight * leftY,
+                    colors = colors
+                )
+                FloatingAnchorMarker(
+                    label = strings["system.floating_button_right"].ifEmpty { "RIGHT" },
+                    x = maxWidth * (0.5f + 0.5f * rightX),
+                    y = maxHeight * rightY,
+                    colors = colors
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingAnchorMarker(label: String, x: Dp, y: Dp, colors: ThemeColors) {
+    Box(
+        modifier = Modifier
+            .offset(x = x - 24.dp, y = y - 24.dp)
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(colors.primaryAccent.copy(alpha = 0.22f))
+            .border(1.5.dp, colors.primaryAccent.copy(alpha = 0.85f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colors.primaryAccent, fontFamily = quicksandFontFamily)
     }
 }
 
@@ -301,7 +449,7 @@ fun NotificationsPanel(
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 3, totalItems = 4, enabled = hasPermission && notificationsEnabled) {
             val intervalEnabled = hasPermission && notificationsEnabled
             val intervalScale by animateFloatAsState(
-                targetValue = if (intervalEnabled) 1f else 0.85f,
+                targetValue = if (intervalEnabled) 1f else 0.90f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                     stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, LocalAnimationSpeed.current)
@@ -309,7 +457,7 @@ fun NotificationsPanel(
                 label = "interval_scale"
             )
             val intervalAlpha by animateFloatAsState(
-                targetValue = if (intervalEnabled) 1f else 0.25f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 300, easing = MotionTokens.Easing.velvet),
                 label = "interval_alpha"
             )
@@ -353,12 +501,13 @@ fun NotificationsPanel(
                         )
                     }
                 }
+                DisabledCardWash(intervalEnabled, oledMode)
             }
         }
         AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 4, enabled = hasPermission) {
             val testBtnEnabled = hasPermission
             val testBtnScale by animateFloatAsState(
-                targetValue = if (testBtnEnabled) 1f else 0.85f,
+                targetValue = if (testBtnEnabled) 1f else 0.90f,
                 animationSpec = spring(
                     dampingRatio = MotionTokens.Springs.gentle.dampingRatio,
                     stiffness = MotionTokens.SpeedUtil.stiffness(MotionTokens.Springs.gentle.stiffness, LocalAnimationSpeed.current)
@@ -366,7 +515,7 @@ fun NotificationsPanel(
                 label = "test_btn_scale"
             )
             val testBtnAlpha by animateFloatAsState(
-                targetValue = if (testBtnEnabled) 1f else 0.25f,
+                targetValue = 1f,
                 animationSpec = tween(durationMillis = 300, easing = MotionTokens.Easing.velvet),
                 label = "test_btn_alpha"
             )
@@ -379,9 +528,10 @@ fun NotificationsPanel(
                 shape = RoundedCornerShape(28.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
                         text = "TEST ALERT",
@@ -409,6 +559,8 @@ fun NotificationsPanel(
                         oledMode = oledMode,
                         cornerRadius = 16.dp
                     )
+                }
+                    DisabledCardWash(testBtnEnabled, oledMode)
                 }
             }
         }
@@ -441,20 +593,26 @@ fun BackupPanel(
             colors = colors
         )
 
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2) {
-            SettingsNavigationCard(
-                title = LocalStrings.current["backup.export"].ifEmpty { "EXPORT BACKUP" }, description = LocalStrings.current["backup.export_desc"].ifEmpty { "Saves your theme, preferences, and excluded apps to a JSON file" },
-                onClick = onExport, isSmallScreen = isSmallScreen,
-                colors = colors, cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
-        AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2) {
-            SettingsNavigationCard(
-                title = LocalStrings.current["backup.restore"].ifEmpty { "RESTORE BACKUP" }, description = LocalStrings.current["backup.restore_desc"].ifEmpty { "Load a backup file to bring all your settings back exactly as they were" },
-                onClick = onImport, isSmallScreen = isSmallScreen,
-                colors = colors, cardBackground = cardBackground, oledMode = oledMode
-            )
-        }
+        ResponsiveSettingsCardGrid(isLandscape, listOf(
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 1, totalItems = 2) {
+                    SettingsNavigationCard(
+                        title = LocalStrings.current["backup.export"].ifEmpty { "EXPORT BACKUP" }, description = LocalStrings.current["backup.export_desc"].ifEmpty { "Saves your theme, preferences, and excluded apps to a JSON file" },
+                        onClick = onExport, isSmallScreen = isSmallScreen,
+                        colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                    )
+                }
+            },
+            {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 2, totalItems = 2) {
+                    SettingsNavigationCard(
+                        title = LocalStrings.current["backup.restore"].ifEmpty { "RESTORE BACKUP" }, description = LocalStrings.current["backup.restore_desc"].ifEmpty { "Load a backup file to bring all your settings back exactly as they were" },
+                        onClick = onImport, isSmallScreen = isSmallScreen,
+                        colors = colors, cardBackground = cardBackground, oledMode = oledMode
+                    )
+                }
+            }
+        ))
     }
 }
 

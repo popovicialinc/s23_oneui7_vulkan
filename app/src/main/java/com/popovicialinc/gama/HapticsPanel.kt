@@ -73,6 +73,7 @@ internal fun HapticPreviewButton(
     enabled: Boolean = true
 ) {
     val ts = LocalTypeScale.current
+    val landscapeGrid = LocalLandscapePanelGrid.current
     val context = LocalContext.current
     val view = LocalView.current
     val animLevel = LocalAnimationLevel.current
@@ -95,7 +96,7 @@ internal fun HapticPreviewButton(
         modifier = modifier
             .height(48.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale)
-            .then(if (!enabled) Modifier.graphicsLayer(alpha = 0.25f, scaleX = 0.85f, scaleY = 0.85f) else Modifier)
+            .then(if (!enabled) Modifier.graphicsLayer(scaleX = 0.90f, scaleY = 0.90f) else Modifier)
             .clip(shape)
             .background(if (oledMode) Color.Black else colors.cardBackground)
             .border(borderWidth, colors.primaryAccent.copy(alpha = borderAlpha), shape)
@@ -129,6 +130,14 @@ internal fun HapticPreviewButton(
             fontFamily = quicksandFontFamily,
             letterSpacing = 1.1.sp
         )
+        if (!enabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background((if (oledMode) Color.Black else Color.White).copy(alpha = 0.50f))
+            )
+        }
     }
 }
 
@@ -149,11 +158,12 @@ internal fun HapticStrengthCard(
     available: Boolean = true
 ) {
     val ts = LocalTypeScale.current
+    val landscapeGrid = LocalLandscapePanelGrid.current
     var lastSliderPreviewAtMs by remember { mutableStateOf(0L) }
     DisabledCardWrapper(enabled = available) {
     Card(
         modifier = Modifier
-            .fillMaxWidth()
+            .fillMaxWidth(if (landscapeGrid) 0.48f else 1f)
             .then(if (!available) Modifier.pointerInput(available) { detectTapGestures { } } else Modifier)
             .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(28.dp)),
         colors = CardDefaults.cardColors(containerColor = cardBackground),
@@ -333,6 +343,12 @@ fun HapticsPanel(
         "reset" -> strings["haptics.reset_title"].ifEmpty { "RESET HAPTICS" }
         else -> strings["haptics.title"].ifEmpty { "HAPTICS" }
     }
+    val panelTitle = when (section) {
+        "core" -> title.replace(" ", "\n")
+        "layout" -> title.replace(" ", "\n")
+        "reset" -> title.replace(" ", "\n")
+        else -> title
+    }
 
     PanelScaffold(
         visible = visible,
@@ -345,14 +361,16 @@ fun HapticsPanel(
         rootExitCascade = true,
         colors = colors
     ) { scrollState ->
-        AnimatedSearchPanelTitle(
-            titleKey = "haptics_$section",
-            text = title,
-            visible = visible,
-            fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
-            colors = colors,
-            scrollState = scrollState
-        )
+        key("haptics_title_$section") {
+            AnimatedSearchPanelTitle(
+                titleKey = "haptics_$section",
+                text = panelTitle,
+                visible = visible,
+                fontSize = if (isLandscape) ts.displayMedium else ts.displayLarge,
+                colors = colors,
+                scrollState = scrollState
+            )
+        }
 
         key("haptics_caption_$section") {
             // Stagger totals below INCLUDE this caption (index 1), matching the
@@ -473,7 +491,7 @@ fun HapticsPanel(
                     )
                 }
 
-                AnimatedElement(visible = visible, cardShadow = false, staggerIndex = 4, totalItems = 5) {
+                AnimatedElement(visible = visible, cardShadow = true, staggerIndex = 4, totalItems = 6) {
                     HapticPreviewButton(
                         text = strings["haptics.press_hold_test"].ifEmpty { "TEST HAPTICS HERE" },
                         onClick = {},

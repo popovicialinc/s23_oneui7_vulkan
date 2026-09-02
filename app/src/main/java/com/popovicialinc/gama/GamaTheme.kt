@@ -404,6 +404,75 @@ val LocalDismissOnClickOutside = compositionLocalOf { true } // New global setti
 val LocalStaggerEnabled = compositionLocalOf { true } // true = cascading stagger, false = simultaneous fade+scale
 val LocalBackButtonAvoidanceEnabled = compositionLocalOf { true } // true = cards duck away from floating back button
 val LocalBackButtonInversed = compositionLocalOf { false } // false = back button on right, true = back button on left
+/** Normalized positions: X is within its half of the screen; Y spans the screen. */
+data class FloatingButtonAnchors(
+    val leftX: Float = 0.30f,
+    val leftY: Float = 0.94f,
+    val rightX: Float = 0.70f,
+    val rightY: Float = 0.94f,
+    /** Landscape anchors use the full screen width; portrait anchors use their half. */
+    val fullWidth: Boolean = false
+)
+val LocalFloatingButtonAnchors = compositionLocalOf { FloatingButtonAnchors() }
+
+class FloatingButtonHoldState {
+    var suppressTap by mutableStateOf(false)
+    var repositioning by mutableStateOf(false)
+    var holdProgress by mutableFloatStateOf(0f)
+    var holding by mutableStateOf(false)
+    var dragTranslationX by mutableFloatStateOf(0f)
+    var dragTranslationY by mutableFloatStateOf(0f)
+}
+
+class FloatingButtonLivePositions {
+    var leftX by mutableStateOf<Float?>(null)
+    var leftY by mutableStateOf<Float?>(null)
+    var rightX by mutableStateOf<Float?>(null)
+    var rightY by mutableStateOf<Float?>(null)
+    var settingsX by mutableStateOf<Float?>(null)
+    var settingsY by mutableStateOf<Float?>(null)
+
+    fun set(isLeftSide: Boolean, isSettingsButton: Boolean, x: Float, y: Float) {
+        when {
+            isSettingsButton -> { settingsX = x; settingsY = y }
+            isLeftSide -> { leftX = x; leftY = y }
+            else -> { rightX = x; rightY = y }
+        }
+    }
+
+    fun clear(isLeftSide: Boolean, isSettingsButton: Boolean) {
+        when {
+            isSettingsButton -> { settingsX = null; settingsY = null }
+            isLeftSide -> { leftX = null; leftY = null }
+            else -> { rightX = null; rightY = null }
+        }
+    }
+
+    fun clearAll() {
+        leftX = null
+        leftY = null
+        rightX = null
+        rightY = null
+        settingsX = null
+        settingsY = null
+    }
+}
+
+data class FloatingButtonPositionController(
+    val leftX: Float = 0.30f,
+    val leftY: Float = 0.94f,
+    val rightX: Float = 0.70f,
+    val rightY: Float = 0.94f,
+    val fullWidth: Boolean = false,
+    val settingsX: Float = 0.84f,
+    val settingsY: Float = 0.94f,
+    val settingsFullWidth: Boolean = false,
+    val livePositions: FloatingButtonLivePositions = FloatingButtonLivePositions(),
+    val onLeftMove: (Float, Float) -> Unit = { _, _ -> },
+    val onRightMove: (Float, Float) -> Unit = { _, _ -> },
+    val onSettingsMove: (Float, Float) -> Unit = { _, _ -> }
+)
+val LocalFloatingButtonPositionController = compositionLocalOf { FloatingButtonPositionController() }
 val LocalShadowsEnabled =
     compositionLocalOf { true } // true = card elevation shadows, false = flat (no shadow blur pass)
 val LocalCardSettled = compositionLocalOf { true }  // false while AnimatedElement is mid-stagger, true once it lands
@@ -411,6 +480,10 @@ val LocalCardProgress =
     compositionLocalOf { 1f }    // mirrors AnimatedElement's progress [0,1]; drives directional shadow intensity
 val LocalCardEnabled =
     compositionLocalOf { true }  // false when the card is disabled; drives shadow fade-out with ease-in-out animation
+val LocalPanelScrollState = compositionLocalOf<androidx.compose.foundation.ScrollState?> { null }
+// True only while PanelScaffold is arranging ordinary settings cards in its
+// two-column landscape grid.
+val LocalLandscapePanelGrid = compositionLocalOf { false }
 val LocalTypeScale = compositionLocalOf {
     AdaptiveTypeScale(
         displayLarge = 50.sp, displayMedium = 44.sp, displaySmall = 37.sp,
