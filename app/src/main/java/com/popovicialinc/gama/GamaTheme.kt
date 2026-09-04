@@ -419,6 +419,7 @@ class FloatingButtonHoldState {
     var suppressTap by mutableStateOf(false)
     var repositioning by mutableStateOf(false)
     var holdProgress by mutableFloatStateOf(0f)
+    var holdStartedAtMs by mutableLongStateOf(0L)
     var holding by mutableStateOf(false)
     var dragTranslationX by mutableFloatStateOf(0f)
     var dragTranslationY by mutableFloatStateOf(0f)

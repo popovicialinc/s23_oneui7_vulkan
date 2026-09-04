@@ -119,6 +119,9 @@ import kotlin.math.cos
 import kotlin.math.PI
 import kotlin.math.roundToInt
 
+private const val FLOATING_BUTTON_HOLD_MS = 2_900L
+private const val FLOATING_BUTTON_INDICATOR_DELAY_MS = 500L
+
 
 
 @Composable
@@ -266,7 +269,9 @@ internal fun Modifier.repositionFloatingButtonOnLongHold(
             val down = awaitFirstDown(requireUnconsumed = false)
             // Positioning is intentionally deliberate: a regular tap still works,
             // while a three-second stationary hold enters drag mode.
-            val endedBeforeHold = withTimeoutOrNull(2_900L) {
+            holdState.holdStartedAtMs = SystemClock.uptimeMillis()
+            holdState.holdProgress = 0f
+            val endedBeforeHold = withTimeoutOrNull(FLOATING_BUTTON_HOLD_MS) {
                 while (true) {
                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
                         ?: return@withTimeoutOrNull true
@@ -292,7 +297,8 @@ internal fun Modifier.repositionFloatingButtonOnLongHold(
                 y = (y + delta.y / height).coerceIn(0.08f, 0.92f)
                 if (isLeftSide) controller.onLeftMove(x, y) else controller.onRightMove(x, y)
             }
-            holdState.repositioning = false
+                holdState.repositioning = false
+            holdState.holdProgress = 0f
         }
     }
 }
@@ -320,7 +326,9 @@ internal fun Modifier.floatingButtonGesture(
             val hapticStartedAt = GamaHaptics.pressStart(context, view)
             latestPressedChange(true)
             holdState?.holding = true
-            val endedBeforeHold = withTimeoutOrNull(2_900L) {
+            holdState?.holdStartedAtMs = SystemClock.uptimeMillis()
+            holdState?.holdProgress = 0f
+            val endedBeforeHold = withTimeoutOrNull(FLOATING_BUTTON_HOLD_MS) {
                 while (true) {
                     val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
                         ?: return@withTimeoutOrNull true
@@ -329,6 +337,7 @@ internal fun Modifier.floatingButtonGesture(
             }
             if (endedBeforeHold != null) {
                 holdState?.holding = false
+                holdState?.holdProgress = 0f
                 latestPressedChange(false)
                 GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, true)
                 latestClick()
@@ -396,6 +405,7 @@ internal fun Modifier.floatingButtonGesture(
             holdState?.dragTranslationX = 0f
             holdState?.dragTranslationY = 0f
             holdState?.holding = false
+            holdState?.holdProgress = 0f
             latestPressedChange(false)
             GamaHaptics.releaseAfterPress(context, view, hapticStartedAt, false)
             holdState?.repositioning = false
@@ -434,11 +444,23 @@ internal fun FloatingHoldIndicator(
     color: Color,
     indicatorSize: Dp
 ) {
-    val progress by animateFloatAsState(
-        targetValue = if (holdState?.holding == true) 1f else 0f,
-        animationSpec = tween(durationMillis = 2_900, easing = LinearEasing),
-        label = "floating_button_hold_progress"
-    )
+    val progress = holdState?.holdProgress ?: 0f
+    LaunchedEffect(holdState?.holding, holdState?.holdStartedAtMs) {
+        if (holdState?.holding != true) {
+            holdState?.holdProgress = 0f
+            return@LaunchedEffect
+        }
+        while (holdState.holding) {
+            val elapsed = SystemClock.uptimeMillis() - holdState.holdStartedAtMs
+            holdState.holdProgress = if (elapsed <= FLOATING_BUTTON_INDICATOR_DELAY_MS) {
+                0f
+            } else {
+                ((elapsed - FLOATING_BUTTON_INDICATOR_DELAY_MS).toFloat() /
+                    (FLOATING_BUTTON_HOLD_MS - FLOATING_BUTTON_INDICATOR_DELAY_MS)).coerceIn(0f, 1f)
+            }
+            withFrameNanos { }
+        }
+    }
     if (progress <= 0f) return
     Canvas(modifier = Modifier.size(indicatorSize)) {
         val stroke = 2.5.dp.toPx()

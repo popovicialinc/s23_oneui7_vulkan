@@ -126,6 +126,26 @@ internal fun PanelScaffold(
     val backButtonInversed = LocalBackButtonInversed.current
     val floatingButtonAnchors = LocalFloatingButtonAnchors.current
 
+    // Keep the card's back-button clearance during the foreground exit. If this
+    // follows `visible` directly, the inset animates to zero while BouncyDialog
+    // is still rendering the cards, making compressed cards expand just before
+    // the panel disappears.
+    var keepBackButtonAvoidance by remember { mutableStateOf(visible) }
+    LaunchedEffect(visible, animLevel, rootExitCascade) {
+        if (visible) {
+            keepBackButtonAvoidance = true
+        } else if (animLevel == 2) {
+            keepBackButtonAvoidance = false
+        } else {
+            val exitStartDelay = if (rootExitCascade) {
+                if (animLevel == 0) 105L else 70L
+            } else 0L
+            val exitDuration = if (animLevel == 0) 170L else 115L
+            delay(exitStartDelay + exitDuration)
+            keepBackButtonAvoidance = false
+        }
+    }
+
     // Floating panel chrome should use the same visual language as the cards:
     // fade + slight zoom + tiny vertical lift.
     // Do NOT launch it from far below with an overshooting spring, because that
@@ -230,7 +250,7 @@ internal fun PanelScaffold(
 
                 CompositionLocalProvider(
                     LocalFloatingBackButtonAvoidance provides FloatingBackButtonAvoidance(
-                        enabled = visible && contentAvoidsBackButton && LocalBackButtonAvoidanceEnabled.current,
+                        enabled = keepBackButtonAvoidance && contentAvoidsBackButton && LocalBackButtonAvoidanceEnabled.current,
                         endPadding = backButtonSize + 32.dp,
                         bottomPadding = if (isSmallScreen) 44.dp else 52.dp,
                         buttonSize = backButtonSize
