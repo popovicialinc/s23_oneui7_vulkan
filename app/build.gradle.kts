@@ -74,8 +74,8 @@ android {
         applicationId = "com.leonardo.gamaptbr"
         minSdk = 29
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.4"
+        versionCode = 18
+        versionName = "1.8"
 
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

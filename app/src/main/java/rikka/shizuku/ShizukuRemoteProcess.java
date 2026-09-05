@@ -82,6 +82,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public int waitFor() throws InterruptedException {
+        if (remote == null) return -1;
         try {
             return remote.waitFor();
         } catch (RemoteException e) {
@@ -91,6 +92,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public int exitValue() {
+        if (remote == null) return -1;
         try {
             return remote.exitValue();
         } catch (RemoteException e) {
@@ -100,6 +102,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public void destroy() {
+        if (remote == null) return;
         try {
             remote.destroy();
         } catch (RemoteException e) {

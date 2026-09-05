@@ -759,9 +759,9 @@ object ShizukuHelper {
                         .filter { it.startsWith("package:") }
                         .map { it.removePrefix("package:").trim() }
                         .filter { it.isNotEmpty() }
-                } finally {
-                    process.destroy()
-                }
+            } finally {
+                try { process.destroy() } catch (_: Exception) {}
+            }
             } catch (_: Exception) {
                 emptyList()
             }
@@ -812,7 +812,7 @@ object ShizukuHelper {
                     .map { it.removePrefix("package:").trim() }
                     .filter { it.isNotEmpty() }
             } finally {
-                process.destroy()
+                try { process.destroy() } catch (_: Exception) {}
             }
         } catch (_: Exception) {
             emptyList()
@@ -872,7 +872,7 @@ object ShizukuHelper {
                     out
                 }
             } finally {
-                process.destroy()
+                try { process.destroy() } catch (_: Exception) {}
             }
 
             if (raw.isEmpty()) return@withContext emptyList()
