@@ -23,6 +23,16 @@ import rikka.shizuku.ShizukuRemoteProcess
 
 object ShizukuHelper {
 
+    internal fun translate(context: Context, section: String, key: String, fallback: String): String {
+        return try {
+            val code = context.getSharedPreferences("gama_prefs", android.content.Context.MODE_PRIVATE)
+                .getString("selected_language", "en") ?: "en"
+            if (code == "en") return fallback
+            val raw = context.assets.open("translations/$code.json").bufferedReader().readText()
+            org.json.JSONObject(raw).optJSONObject(section)?.optString(key)?.takeIf { it.isNotEmpty() } ?: fallback
+        } catch (_: Exception) { fallback }
+    }
+
     // ── Core Shizuku checks — use the real API now that source is vendored ────
 
     fun checkBinder(): Boolean = try {
@@ -34,6 +44,36 @@ object ShizukuHelper {
             if (Shizuku.isPreV11()) return false
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         } catch (_: Exception) { false }
+    }
+
+    /** Always returns true when binder is connected — we let the server decide. */
+    fun checkPermissionForce(): Boolean = checkBinder()
+
+    fun requestPermissionNow(): Boolean {
+        return try {
+            Shizuku.requestPermission(0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun getDiagnosticInfo(): String {
+        return try {
+            val binder = checkBinder()
+            val preV11 = try { Shizuku.isPreV11() } catch (_: Exception) { -1 }
+            val perm = try {
+                if (preV11 == true) "preV11"
+                else Shizuku.checkSelfPermission().toString()
+            } catch (e: Exception) { "error: ${e.message}" }
+            val ver = try { Shizuku.getVersion().toString() } catch (_: Exception) { "?" }
+            val serverUid = try {
+                val f = Shizuku::class.java.getDeclaredField("serverUid")
+                f.isAccessible = true
+                f.getInt(null).toString()
+            } catch (_: Exception) { "?" }
+            "binder=$binder preV11=$preV11 perm=$perm ver=$ver serverUid=$serverUid"
+        } catch (e: Exception) { "diag error: ${e.message}" }
     }
 
     // ── Root (su) backend ─────────────────────────────────────────────────────
@@ -68,7 +108,7 @@ object ShizukuHelper {
     fun isRootAvailable(): Boolean = rootAvailabilityCache ?: false
 
     /** True when any backend (root or Shizuku) can execute commands right now. */
-    fun isBackendReady(): Boolean = isRootAvailable() || (checkBinder() && checkPermission())
+    fun isBackendReady(): Boolean = isRootAvailable() || checkBinder()
 
     /**
      * After a renderer change, keeps the QS renderer toggle tile in sync
@@ -193,7 +233,7 @@ object ShizukuHelper {
         if (isRootAvailable()) {
             return@withContext runRootCommand(cmd)
         }
-        if (!checkBinder() || !checkPermission()) {
+        if (!checkBinder()) {
             if (refreshRootAvailability()) return@withContext runRootCommand(cmd)
             return@withContext "Error: Shizuku not available and no root access"
         }
@@ -253,7 +293,7 @@ object ShizukuHelper {
         } catch (_: Exception) {
             Toast.makeText(
                 context,
-                "Open the Shizuku app and tap 'Use Shizuku' to grant permission",
+                translate(context, "dialogs", "shizuku_open_tap_use", "Open the Shizuku app and tap 'Use Shizuku' to grant permission"),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -361,7 +401,7 @@ object ShizukuHelper {
         "com.google.android.permissioncontroller",
         "moe.shizuku.privileged.api",
         "rikka.shizuku",
-        "com.popovicialinc.gama"
+        "com.leonardo.gamaptbr"
     )
 
     // ── Renderer switch: shared implementation ────────────────────────────────
@@ -640,11 +680,7 @@ object ShizukuHelper {
             return
         }
         if (!checkBinder()) {
-            Toast.makeText(context, "Shizuku not running!", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!checkPermission()) {
-            requestPermissionFallback(context)
+            Toast.makeText(context, translate(context, "dialogs", "shizuku_not_running_toast", "Shizuku not running!"), Toast.LENGTH_SHORT).show()
             return
         }
         scope.launch { block() }
@@ -693,7 +729,7 @@ object ShizukuHelper {
      * always exits cleanly within the timeout.
      */
     suspend fun getAllPackageNames(): List<String> = withContext(Dispatchers.IO) {
-        val shizukuReady = checkBinder() && checkPermission()
+        val shizukuReady = checkBinder()
         if (!shizukuReady && !isRootAvailable() && !refreshRootAvailability()) return@withContext emptyList()
         if (!shizukuReady) {
             // Root path: same concurrent-reader pattern, just spawned via su.
@@ -792,7 +828,7 @@ object ShizukuHelper {
     // a classic deadlock.  Draining stdout in a concurrent coroutine prevents this.
 
     suspend fun fetchCrashLogs(): List<CrashEntry> = withContext(Dispatchers.IO) {
-        if (!checkBinder() || !checkPermission()) return@withContext emptyList()
+        if (!checkBinder()) return@withContext emptyList()
 
         try {
             val cls    = Shizuku::class.java

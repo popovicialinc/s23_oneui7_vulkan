@@ -291,7 +291,7 @@ fun CrashLogPanel(
         gamaCrashes = parseGamaCrashLog(rawText)
 
         // System dropbox crashes — only attempt if Shizuku is available
-        if (ShizukuHelper.checkBinder() && ShizukuHelper.checkPermission()) {
+        if (ShizukuHelper.checkBinder()) {
             systemCrashesLoading = true
             systemCrashes = withContext(Dispatchers.IO) {
                 ShizukuHelper.fetchCrashLogs()
@@ -354,7 +354,7 @@ fun CrashLogPanel(
     // Compute a stable total item count up-front so every AnimatedElement in
     // this panel shares the same value (required for the exit stagger to work).
     val gamaCount   = gamaCrashes.size
-    val systemCount = if (!systemCrashesLoading && ShizukuHelper.checkBinder() && ShizukuHelper.checkPermission())
+    val systemCount = if (!systemCrashesLoading && ShizukuHelper.checkBinder())
         systemCrashes.size.coerceAtMost(20) else 0
     // Slots: 1 section header + gamaCount cards (or 1 empty card) + clear button
     //      + 1 section header + systemCount cards (or 1 status card)
@@ -457,7 +457,7 @@ fun CrashLogPanel(
                     CircularProgressIndicator(color = colors.primaryAccent, modifier = Modifier.size(28.dp))
                 }
             }
-            !ShizukuHelper.checkBinder() || !ShizukuHelper.checkPermission() -> {
+            !ShizukuHelper.checkBinder() -> {
                 AnimatedElement(visible = listItemsVisible, staggerIndex = systemHeaderIdx + 1, totalItems = totalListItems) {
                     Box(modifier = Modifier.fillMaxWidth()
                         .border(1.dp, colors.primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(28.dp))

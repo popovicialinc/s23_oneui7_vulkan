@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
+import rikka.shizuku.Shizuku
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -179,7 +180,7 @@ fun ShizukuHelpDialog(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (helpType == "not_running") "Shizuku isn't running" else "Permission Needed",
+                    text = if (helpType == "not_running") LocalStrings.current["dialogs.shizuku_not_running_title"].ifEmpty { "Shizuku isn't running" } else LocalStrings.current["dialogs.shizuku_permission_title"].ifEmpty { "Permission Needed" },
                     fontSize = if (isLandscape) ts.headlineMedium else ts.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     fontFamily = quicksandFontFamily,
@@ -190,9 +191,9 @@ fun ShizukuHelpDialog(
             // ── One-line intro — what the user needs to do, in a nutshell ──
             Text(
                 text = if (helpType == "not_running")
-                    "GAMA needs the Shizuku service running to switch the renderer."
+                    LocalStrings.current["dialogs.shizuku_needs_running"].ifEmpty { "GAMA needs the Shizuku service running to switch the renderer." }
                 else
-                    "GAMA is installed, but hasn't been authorized in Shizuku yet.",
+                    LocalStrings.current["dialogs.shizuku_not_authorized"].ifEmpty { "GAMA is installed, but hasn't been authorized in Shizuku yet." },
                 fontSize = ts.bodyMedium,
                 lineHeight = (ts.bodyMedium.value * 1.4f).sp,
                 color = colors.textSecondary,
@@ -335,14 +336,14 @@ fun ShizukuHelpDialog(
                 }
 
                 // ── Steps — numbered, so the path is obvious ──
-                DialogSectionLabel("How to start Shizuku", colors = colors)
+                DialogSectionLabel(LocalStrings.current["dialogs.shizuku_how_to_start"].ifEmpty { "How to start Shizuku" }, colors = colors)
                 if (!shizukuInstalled) {
-                    DialogStepRow(1, "Install Shizuku with the button above", colors = colors)
-                    DialogStepRow(2, "Open Shizuku and tap \"Start\"", colors = colors)
-                    DialogStepRow(3, "Come back to GAMA", colors = colors)
+                    DialogStepRow(1, LocalStrings.current["dialogs.shizuku_step_install_above"].ifEmpty { "Install Shizuku with the button above" }, colors = colors)
+                    DialogStepRow(2, LocalStrings.current["dialogs.shizuku_step_open_start"].ifEmpty { "Open Shizuku and tap \"Start\"" }, colors = colors)
+                    DialogStepRow(3, LocalStrings.current["dialogs.shizuku_step_come_back"].ifEmpty { "Come back to GAMA" }, colors = colors)
                 } else {
-                    DialogStepRow(1, "Tap \"Start\" inside the Shizuku app", colors = colors)
-                    DialogStepRow(2, "Come back to GAMA", colors = colors)
+                    DialogStepRow(1, LocalStrings.current["dialogs.shizuku_step_start_inside"].ifEmpty { "Tap \"Start\" inside the Shizuku app" }, colors = colors)
+                    DialogStepRow(2, LocalStrings.current["dialogs.shizuku_step_come_back"].ifEmpty { "Come back to GAMA" }, colors = colors)
                 }
 
                 if (shizukuInstalled) {
@@ -364,7 +365,7 @@ fun ShizukuHelpDialog(
 
                 // ── Troubleshooting footnote ──
                 Text(
-                    text = "Shizuku won't start? Follow the wireless debugging instructions inside the Shizuku app.",
+                    text = LocalStrings.current["dialogs.shizuku_wont_start"].ifEmpty { "Shizuku won't start? Follow the wireless debugging instructions inside the Shizuku app." },
                     fontSize = ts.bodySmall,
                     lineHeight = (ts.bodySmall.value * 1.3f).sp,
                     color = colors.textSecondary,
@@ -375,12 +376,24 @@ fun ShizukuHelpDialog(
                 )
             } else {
                 // ── "Permission Needed" — same numbered-step treatment ──
-                DialogSectionLabel("Authorize GAMA", colors = colors)
-                DialogStepRow(1, "Open the Shizuku app", colors = colors)
-                DialogStepRow(2, "Tap \"Authorized applications\"", colors = colors)
-                DialogStepRow(3, "Enable GAMA", colors = colors)
-                DialogStepRow(4, "Reopen GAMA from your recents", colors = colors)
+                DialogSectionLabel(LocalStrings.current["dialogs.shizuku_authorize_gama"].ifEmpty { "Authorize GAMA" }, colors = colors)
+                DialogStepRow(1, LocalStrings.current["dialogs.shizuku_step_open_app"].ifEmpty { "Open the Shizuku app" }, colors = colors)
+                DialogStepRow(2, LocalStrings.current["dialogs.shizuku_step_authorized_apps"].ifEmpty { "Tap \"Authorized applications\"" }, colors = colors)
+                DialogStepRow(3, LocalStrings.current["dialogs.shizuku_step_enable_gama"].ifEmpty { "Enable GAMA" }, colors = colors)
+                DialogStepRow(4, LocalStrings.current["dialogs.shizuku_step_reopen"].ifEmpty { "Reopen GAMA from your recents" }, colors = colors)
                 if (shizukuInstalled) {
+                    DialogButton(
+                        text = "Request Permission",
+                        onClick = {
+                            try { Shizuku.requestPermission(0) } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = colors,
+                        cardBackground = cardBackground,
+                        accent = true,
+                        borderAlphaOverride = dialogBorderAlpha
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     DialogButton(
                         text = LocalStrings.current["dialogs.btn_open_shizuku"].ifEmpty { "Open Shizuku" },
                         onClick = {
@@ -401,7 +414,7 @@ fun ShizukuHelpDialog(
             // ── Root alternative — only relevant when neither backend is ready ──
             if (!rootAvailable) {
                 Text(
-                    text = "Device rooted? GAMA also works with root access (Magisk / KernelSU) — no Shizuku needed.",
+                    text = LocalStrings.current["dialogs.root_hint"].ifEmpty { "Device rooted? GAMA also works with root access (Magisk / KernelSU) — no Shizuku needed." },
                     fontSize = ts.bodySmall,
                     lineHeight = (ts.bodySmall.value * 1.3f).sp,
                     color = colors.textSecondary,
@@ -411,6 +424,18 @@ fun ShizukuHelpDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            // ── Diagnostic info ──
+            val diagInfo = remember { ShizukuHelper.getDiagnosticInfo() }
+            Text(
+                text = diagInfo,
+                fontSize = ts.bodySmall,
+                lineHeight = (ts.bodySmall.value * 1.2f).sp,
+                color = colors.textSecondary.copy(alpha = 0.5f),
+                fontFamily = quicksandFontFamily,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // ── Dismiss — secondary so the download/open action stays primary ──
             DialogButton(

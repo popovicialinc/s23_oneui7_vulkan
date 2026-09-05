@@ -253,7 +253,7 @@ fun GamaUI(
                     var latestPermission = false
                     for (attempt in 0 until 8) {
                         latestRunning = ShizukuHelper.checkBinder()
-                        latestPermission = latestRunning && ShizukuHelper.checkPermission()
+                        latestPermission = latestRunning
                         if (latestRunning && latestPermission) break
                         if (attempt < 7) delay(250L)
                     }
@@ -1387,7 +1387,7 @@ fun GamaUI(
 
     LaunchedEffect(Unit) {
         shizukuRunning = ShizukuHelper.checkBinder()
-        shizukuPermissionGranted = ShizukuHelper.checkPermission()
+        shizukuPermissionGranted = ShizukuHelper.checkBinder()
         // Do not invoke `su` at startup: root managers can show an approval
         // dialog. The user explicitly requests root from RootAccessDialog.
         rootAvailable = ShizukuHelper.isRootAvailable()

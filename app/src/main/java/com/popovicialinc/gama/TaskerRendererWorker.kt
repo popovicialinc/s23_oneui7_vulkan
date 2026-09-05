@@ -30,7 +30,7 @@ class TaskerRendererWorker(
         // Tasker can cold-start GAMA, so root has not necessarily been probed in
         // this process. A configured Tasker action is an explicit user request.
         val rootReady = ShizukuHelper.refreshRootAvailability()
-        val shizukuReady = ShizukuHelper.checkBinder() && ShizukuHelper.checkPermission()
+        val shizukuReady = ShizukuHelper.checkBinder()
         if (!rootReady && !shizukuReady) return Result.failure()
 
         val applied = when (target) {

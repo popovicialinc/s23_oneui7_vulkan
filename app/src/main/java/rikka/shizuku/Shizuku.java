@@ -92,7 +92,7 @@ public class Shizuku {
             data.writeStrongBinder(SHIZUKU_APPLICATION.asBinder());
             data.writeInt(1);
             args.writeToParcel(data, 0);
-            result = binder.transact(18 /*IShizukuService.Stub.TRANSACTION_attachApplication*/, data, reply, 0);
+            result = binder.transact(17 /*IShizukuService.Stub.TRANSACTION_attachApplication*/, data, reply, 0);
             reply.readException();
         } finally {
             reply.recycle();

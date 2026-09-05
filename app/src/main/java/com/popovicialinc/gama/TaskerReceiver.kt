@@ -22,7 +22,7 @@ import androidx.work.workDataOf
 class TaskerReceiver : BroadcastReceiver() {
 
     companion object {
-        const val ACTION_SET_RENDERER = "com.popovicialinc.gama.ACTION_SET_RENDERER"
+        const val ACTION_SET_RENDERER = "com.leonardo.gamaptbr.ACTION_SET_RENDERER"
         const val EXTRA_RENDERER = "renderer"
         const val EXTRA_AGGRESSIVE = "aggressive"
         const val EXTRA_TOKEN = "token"

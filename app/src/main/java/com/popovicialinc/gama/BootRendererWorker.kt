@@ -127,7 +127,7 @@ class BootRendererWorker(
     private suspend fun waitForShizuku(timeoutMs: Long): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            if (ShizukuHelper.checkBinder() && ShizukuHelper.checkPermission()) return true
+            if (ShizukuHelper.checkBinder()) return true
             delay(2_000L)
         }
         return false
@@ -156,7 +156,7 @@ class BootRendererWorker(
                 "$renderer renderer re-applied after reboot. Newly launched apps will use it."
         } else {
             "GAMA · $renderer restore skipped" to
-                "Shizuku was not ready after boot. Open GAMA and switch manually when you want."
+                ShizukuHelper.translate(context, "dialogs", "shizuku_boot_not_ready", "Shizuku was not ready after boot. Open GAMA and switch manually when you want.")
         }
 
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)

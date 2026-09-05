@@ -55,7 +55,7 @@
             android:name=".TaskerReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.popovicialinc.gama.ACTION_SET_RENDERER" />
+                <action android:name="com.leonardo.gamaptbr.ACTION_SET_RENDERER" />
             </intent-filter>
         </receiver>
 

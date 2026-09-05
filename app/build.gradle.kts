@@ -50,6 +50,10 @@ android {
     namespace = "com.popovicialinc.gama"
     compileSdk = 36
 
+    sourceSets {
+        getByName("main").java.srcDirs("build/generated/aidl_source_output_dir/debug/out")
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
@@ -67,7 +71,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.popovicialinc.gama"
+        applicationId = "com.leonardo.gamaptbr"
         minSdk = 29
         targetSdk = 35
         versionCode = 13
@@ -109,7 +113,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = false
-        aidl = true
+        aidl = false
         resValues = false
         shaders = false
     }

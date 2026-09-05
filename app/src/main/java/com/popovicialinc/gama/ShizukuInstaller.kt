@@ -45,7 +45,7 @@ object ShizukuInstaller {
     private var lastError: String = ""
 
     // Session-install broadcast id for the confirmation callback.
-    private const val ACTION_INSTALL_STATUS = "com.popovicialinc.gama.INSTALL_STATUS"
+    private const val ACTION_INSTALL_STATUS = "com.leonardo.gamaptbr.INSTALL_STATUS"
     private const val EXTRA_SESSION_ID = "session_id"
 
     /** Result of a download attempt — either [apkFile] (verified) or [error]. */

@@ -1020,7 +1020,7 @@ fun RendererCard(
                             Text("⚠️", fontSize = ts.labelMedium)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (!shizukuRunning) "Shizuku not running" else "Permission needed",
+                                text = if (!shizukuRunning) strings["dialogs.shizuku_not_running_card"].ifEmpty { "Shizuku not running" } else strings["dialogs.shizuku_permission_needed_card"].ifEmpty { "Permission needed" },
                                 fontSize = ts.labelMedium,
                                 color = stateColor,
                                 fontFamily = quicksandFontFamily,
