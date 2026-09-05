@@ -247,7 +247,8 @@ object ShizukuHelper {
             )
             method.isAccessible = true
             val remoteProcess = method.invoke(null, arrayOf("sh", "-c", cmd), null, null)
-            val process = remoteProcess as? Process ?: return@withContext "Error: Could not cast to Process"
+            val process = remoteProcess as? Process
+                ?: return@withContext "Error: Shizuku returned null — ensure GAMA is authorized in Shizuku. Tap 'Open Shizuku' in the info card."
 
             try {
                 val (output, error, finished) = coroutineScope {

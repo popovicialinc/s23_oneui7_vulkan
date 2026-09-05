@@ -64,6 +64,9 @@ public class Shizuku {
         @Override
         public void dispatchRequestPermissionResult(int requestCode, Bundle data) {
             boolean allowed = data.getBoolean(REQUEST_PERMISSION_REPLY_ALLOWED, false);
+            if (allowed) {
+                permissionGranted = true;
+            }
             scheduleRequestPermissionResultListener(requestCode, allowed ? PackageManager.PERMISSION_GRANTED : PackageManager.PERMISSION_DENIED);
         }
 

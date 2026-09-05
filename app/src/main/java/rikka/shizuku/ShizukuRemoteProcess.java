@@ -28,6 +28,10 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     ShizukuRemoteProcess(IRemoteProcess remote) {
         this.remote = remote;
+        if (remote == null) {
+            Log.w(TAG, "ShizukuRemoteProcess created with null remote — permission may not be granted");
+            return;
+        }
         try {
             this.remote.asBinder().linkToDeath((IBinder.DeathRecipient) () -> {
                 this.remote = null;
