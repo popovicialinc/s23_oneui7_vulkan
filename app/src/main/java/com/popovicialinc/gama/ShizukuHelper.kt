@@ -495,7 +495,15 @@ object ShizukuHelper {
             // The shell can report a bogus failure (e.g. the Shizuku remote process
             // died mid-wait) while the prop actually applied. Trust the property
             // itself: read it back before giving up.
-            val readBack = runCommand("getprop debug.hwui.renderer").trim()
+            // Try local getprop first (doesn't need Shizuku), then Shizuku as fallback.
+            val readBack = try {
+                val p = Runtime.getRuntime().exec(arrayOf("getprop", "debug.hwui.renderer"))
+                val result = p.inputStream.bufferedReader().readText().trim()
+                p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+                result
+            } catch (_: Exception) {
+                runCommand("getprop debug.hwui.renderer").trim()
+            }
             if (readBack.equals(propValue, ignoreCase = true)) {
                 onVerboseOutput?.invoke(
                     "setprop reported an error, but the prop reads back as '$readBack' — continuing.\n\n"

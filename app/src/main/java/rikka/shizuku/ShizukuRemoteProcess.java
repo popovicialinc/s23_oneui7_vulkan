@@ -49,6 +49,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public OutputStream getOutputStream() {
+        if (remote == null) return new java.io.ByteArrayOutputStream(0);
         if (os == null) {
             try {
                 os = new ParcelFileDescriptor.AutoCloseOutputStream(remote.getOutputStream());
@@ -61,6 +62,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public InputStream getInputStream() {
+        if (remote == null) return new java.io.ByteArrayInputStream(new byte[0]);
         if (is == null) {
             try {
                 is = new ParcelFileDescriptor.AutoCloseInputStream(remote.getInputStream());
@@ -73,6 +75,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public InputStream getErrorStream() {
+        if (remote == null) return new java.io.ByteArrayInputStream(new byte[0]);
         try {
             return new ParcelFileDescriptor.AutoCloseInputStream(remote.getErrorStream());
         } catch (RemoteException e) {
@@ -111,6 +114,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
     }
 
     public boolean alive() {
+        if (remote == null) return false;
         try {
             return remote.alive();
         } catch (RemoteException e) {
@@ -119,6 +123,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
     }
 
     public boolean waitForTimeout(long timeout, TimeUnit unit) throws InterruptedException {
+        if (remote == null) return false;
         try {
             return remote.waitForTimeout(timeout, unit.toString());
         } catch (RemoteException e) {
